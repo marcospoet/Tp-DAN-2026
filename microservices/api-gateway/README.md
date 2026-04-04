@@ -41,85 +41,53 @@
 
 ---
 
-## Rutas configuradas (application.yml)
+## Rutas configuradas (application.properties)
 
-```yaml
-spring:
-  cloud:
-    gateway:
-      routes:
-        - id: auth-service
-          uri: lb://AUTH-SERVICE          # lb:// usa Eureka para resolución
-          predicates:
-            - Path=/api/auth/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: authCircuitBreaker
-                fallbackUri: forward:/fallback/auth
+```properties
+# Auto-discovery via Eureka (útil para desarrollo)
+spring.cloud.gateway.discovery.locator.enabled=true
+spring.cloud.gateway.discovery.locator.lower-case-service-id=true
 
-        - id: transaction-service
-          uri: lb://TRANSACTION-SERVICE
-          predicates:
-            - Path=/api/transactions/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: txCircuitBreaker
-                fallbackUri: forward:/fallback/transactions
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 100
-                redis-rate-limiter.burstCapacity: 200
+# Ruta: auth-service
+spring.cloud.gateway.routes[0].id=auth-service
+spring.cloud.gateway.routes[0].uri=lb://auth-service
+spring.cloud.gateway.routes[0].predicates[0]=Path=/api/auth/**
 
-        - id: ai-service
-          uri: lb://AI-SERVICE
-          predicates:
-            - Path=/api/ai/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: aiCircuitBreaker
-                fallbackUri: forward:/fallback/ai
+# Ruta: transaction-service
+spring.cloud.gateway.routes[1].id=transaction-service
+spring.cloud.gateway.routes[1].uri=lb://transaction-service
+spring.cloud.gateway.routes[1].predicates[0]=Path=/api/transactions/**
+
+# Ruta: ai-service
+spring.cloud.gateway.routes[2].id=ai-service
+spring.cloud.gateway.routes[2].uri=lb://ai-service
+spring.cloud.gateway.routes[2].predicates[0]=Path=/api/ai/**
 ```
+
+> **TODO (Fase 3):** agregar filtros `CircuitBreaker` a cada ruta y crear endpoints de fallback en `FallbackController.java`.
 
 ---
 
 ## Resilience4J — Configuración por servicio
 
-```yaml
-resilience4j:
-  circuitbreaker:
-    instances:
-      authCircuitBreaker:
-        slidingWindowSize: 10
-        failureRateThreshold: 50        # Abre si 50% de calls fallan
-        waitDurationInOpenState: 10s    # Espera 10s antes de pasar a HALF_OPEN
-        permittedCallsInHalfOpenState: 3
+```properties
+# Circuit Breaker — auth-service
+resilience4j.circuitbreaker.instances.auth-service.sliding-window-size=10
+resilience4j.circuitbreaker.instances.auth-service.failure-rate-threshold=50
+resilience4j.circuitbreaker.instances.auth-service.wait-duration-in-open-state=10s
 
-      txCircuitBreaker:
-        slidingWindowSize: 20
-        failureRateThreshold: 50
-        waitDurationInOpenState: 15s
+# Circuit Breaker — transaction-service
+resilience4j.circuitbreaker.instances.transaction-service.sliding-window-size=10
+resilience4j.circuitbreaker.instances.transaction-service.failure-rate-threshold=50
+resilience4j.circuitbreaker.instances.transaction-service.wait-duration-in-open-state=10s
 
-      aiCircuitBreaker:
-        slidingWindowSize: 5
-        failureRateThreshold: 60
-        waitDurationInOpenState: 30s   # AI puede tardar más en recuperarse
-        slowCallRateThreshold: 80
-        slowCallDurationThreshold: 25s  # Calls > 25s se consideran "lentas"
-
-  retry:
-    instances:
-      authCircuitBreaker:
-        maxAttempts: 3
-        waitDuration: 500ms
-      txCircuitBreaker:
-        maxAttempts: 2
-        waitDuration: 200ms
-      aiCircuitBreaker:
-        maxAttempts: 1                  # AI no se reintenta (idempotencia no garantizada)
+# Circuit Breaker — ai-service
+resilience4j.circuitbreaker.instances.ai-service.sliding-window-size=5
+resilience4j.circuitbreaker.instances.ai-service.failure-rate-threshold=60
+resilience4j.circuitbreaker.instances.ai-service.wait-duration-in-open-state=15s
 ```
+
+> Los nombres de instancia (`auth-service`, `transaction-service`, `ai-service`) deben coincidir con el `name` del filtro `CircuitBreaker` en cada ruta.
 
 ---
 

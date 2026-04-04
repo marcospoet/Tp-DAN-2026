@@ -60,37 +60,39 @@ Es la única fuente de verdad sobre quién es el usuario y cómo quiere usar la 
 
 ---
 
-## Configuración (application.yml)
+## Configuración (application.properties)
 
-```yaml
-server:
-  port: 8081
+```properties
+server.port=8081
+spring.application.name=auth-service
 
-spring:
-  application:
-    name: AUTH-SERVICE
-  datasource:
-    url: jdbc:postgresql://postgres:5432/budgetbuddy?currentSchema=auth
-    username: ${AUTH_DB_USER}         # Variable de entorno
-    password: ${AUTH_DB_PASSWORD}     # Variable de entorno — NUNCA hardcodear
-  jpa:
-    hibernate:
-      ddl-auto: validate              # En prod usar Flyway/Liquibase para migraciones
-    properties:
-      hibernate:
-        default_schema: auth
+# PostgreSQL — schema: auth
+spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:budgetbuddy}
+spring.datasource.username=${AUTH_DB_USER:auth_user}
+spring.datasource.password=${AUTH_DB_PASSWORD:auth_pass}
+spring.datasource.driver-class-name=org.postgresql.Driver
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://eureka-server:8761/eureka/
+# JPA — Flyway es quien crea y migra el schema, Hibernate solo valida
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.default_schema=auth
 
-jwt:
-  secret: ${JWT_SECRET}              # Clave compartida con api-gateway
-  expiration: 86400000               # 24 horas en ms
+# Flyway — scripts en src/main/resources/db/migration/
+spring.flyway.schemas=auth
+spring.flyway.locations=classpath:db/migration
+spring.flyway.baseline-on-migrate=true
 
-rabbitmq:
-  exchange: budgetbuddy.events
+# RabbitMQ
+spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=${RABBITMQ_USER:guest}
+spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
+
+# Eureka
+eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
+
+# Actuator
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.health.show-details=always
 ```
 
 ---

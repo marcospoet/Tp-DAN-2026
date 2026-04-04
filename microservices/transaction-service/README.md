@@ -68,51 +68,43 @@ Ningún otro servicio puede leer ni escribir en las tablas `txn.transactions` o 
 
 ---
 
-## Configuración (application.yml)
+## Configuración (application.properties)
 
-```yaml
-server:
-  port: 8082
+```properties
+server.port=8082
+spring.application.name=transaction-service
 
-spring:
-  application:
-    name: TRANSACTION-SERVICE
-  datasource:
-    url: jdbc:postgresql://postgres:5432/budgetbuddy?currentSchema=txn
-    username: ${TXN_DB_USER}
-    password: ${TXN_DB_PASSWORD}
-  jpa:
-    properties:
-      hibernate:
-        default_schema: txn
+# PostgreSQL — schema: txn
+# txn_user solo tiene acceso al schema txn, no al schema auth
+spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:budgetbuddy}
+spring.datasource.username=${TXN_DB_USER:txn_user}
+spring.datasource.password=${TXN_DB_PASSWORD:txn_pass}
+spring.datasource.driver-class-name=org.postgresql.Driver
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://eureka-server:8761/eureka/
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.default_schema=txn
 
-minio:
-  endpoint: http://minio:9000
-  access-key: ${MINIO_ACCESS_KEY}
-  secret-key: ${MINIO_SECRET_KEY}
-  bucket: receipts
+# Flyway
+spring.flyway.schemas=txn
+spring.flyway.locations=classpath:db/migration
+spring.flyway.baseline-on-migrate=true
 
-dolar-api:
-  url: https://dolarapi.com/v1/dolares
+# RabbitMQ
+# Consume: user.deleted | Publica: transaction.created, budget.threshold.exceeded
+spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=${RABBITMQ_USER:guest}
+spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
 
-resilience4j:
-  retry:
-    instances:
-      dolarApi:
-        maxAttempts: 3
-        waitDuration: 1s
-  circuitbreaker:
-    instances:
-      dolarApi:
-        slidingWindowSize: 5
-        failureRateThreshold: 60
-        waitDurationInOpenState: 60s
+# Eureka
+eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
+
+# Actuator
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.health.show-details=always
 ```
+
+> **TODO:** agregar configuración de MinIO, DolarAPI y Resilience4J cuando se implementen esas funcionalidades.
 
 ---
 

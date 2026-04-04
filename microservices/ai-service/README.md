@@ -49,34 +49,29 @@ No persiste transacciones directamente: devuelve el resultado parseado al client
 
 ---
 
-## Configuración (application.yml)
+## Configuración (application.properties)
 
-```yaml
-server:
-  port: 8083
+```properties
+server.port=8083
+spring.application.name=ai-service
 
-spring:
-  application:
-    name: AI-SERVICE
-  data:
-    mongodb:
-      uri: mongodb://mongodb:27017/budgetbuddy_ai
-      # Autenticación: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/budgetbuddy_ai
+# MongoDB — única base de datos de este servicio (sin acceso a PostgreSQL)
+# Colecciones: chat_sessions, chat_messages, analytics_cache
+spring.data.mongodb.uri=mongodb://${MONGO_USER:ai_user}:${MONGO_PASSWORD:ai_pass}@${MONGO_HOST:localhost}:27017/ai_db?authSource=admin
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://eureka-server:8761/eureka/
+# RabbitMQ
+# Consume: transaction.created (invalida cache de analytics)
+spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=${RABBITMQ_USER:guest}
+spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
 
-ai:
-  timeout-seconds: 30             # Timeout para llamadas a proveedores de IA
-  chat:
-    max-messages: 50              # Máximo de mensajes en historial enviados al LLM
-    context-transactions: 60      # Últimas N transacciones incluidas en el contexto
+# Eureka
+eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
 
-analytics:
-  cache:
-    ttl-minutes: 60               # TTL del cache de analytics en MongoDB
+# Actuator
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.health.show-details=always
 ```
 
 ---

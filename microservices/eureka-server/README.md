@@ -25,19 +25,21 @@ se registran aquí al iniciar. Permite que se descubran entre sí por nombre en 
 </dependency>
 ```
 
-**application.yml:**
-```yaml
-server:
-  port: 8761
+**application.properties:**
+```properties
+server.port=8761
+spring.application.name=eureka-server
 
-eureka:
-  instance:
-    hostname: eureka-server
-  client:
-    register-with-eureka: false   # El servidor no se registra a sí mismo
-    fetch-registry: false
-  server:
-    enable-self-preservation: false  # Simplifica el desarrollo local
+# El servidor no se registra a sí mismo ni busca otros servidores Eureka
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+
+# Reduce el tiempo de espera al arrancar sin clientes conectados
+eureka.server.wait-time-in-ms-when-sync-empty=0
+
+# Actuator
+management.endpoints.web.exposure.include=health,info
+management.endpoint.health.show-details=always
 ```
 
 **Clase principal:**
@@ -57,14 +59,9 @@ public class EurekaServerApplication { ... }
 
 ## Cómo se registran los clientes
 
-Cada microservicio incluye en su `application.yml`:
-```yaml
-eureka:
-  client:
-    service-url:
-      defaultZone: http://eureka-server:8761/eureka/
-  instance:
-    prefer-ip-address: true
+Cada microservicio incluye en su `application.properties`:
+```properties
+eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
 ```
 
 Y en sus dependencias Maven:
