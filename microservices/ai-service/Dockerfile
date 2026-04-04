@@ -21,6 +21,7 @@ RUN mvn -pl ai-service clean package -DskipTests -q
 
 # ---- Stage 2: Runtime ----
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache curl
 WORKDIR /app
 COPY --from=builder /workspace/ai-service/target/*.jar app.jar
 

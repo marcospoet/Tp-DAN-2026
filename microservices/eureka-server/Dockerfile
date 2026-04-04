@@ -26,6 +26,7 @@ RUN mvn -pl eureka-server clean package -DskipTests -q
 
 # ---- Stage 2: Runtime ----
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache curl
 WORKDIR /app
 COPY --from=builder /workspace/eureka-server/target/*.jar app.jar
 
