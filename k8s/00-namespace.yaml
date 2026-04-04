@@ -1,0 +1,11 @@
+# ============================================================
+# Namespace — budgetbuddy
+# Todos los recursos del TP viven en este namespace.
+# Aplicar primero: kubectl apply -f k8s/00-namespace.yaml
+# ============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: budgetbuddy
+  labels:
+    project: tp-dan-2026

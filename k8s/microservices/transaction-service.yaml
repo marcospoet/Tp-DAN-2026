@@ -1,0 +1,102 @@
+# ============================================================
+# Transaction Service — Deployment + Service
+#
+# Construir imagen:
+#   eval $(minikube docker-env)
+#   docker build -f microservices/transaction-service/Dockerfile \
+#     -t budgetbuddy/transaction-service:latest ./microservices
+# ============================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+  namespace: budgetbuddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-service
+  template:
+    metadata:
+      labels:
+        app: transaction-service
+    spec:
+      containers:
+        - name: transaction-service
+          image: budgetbuddy/transaction-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: budgetbuddy
+            - name: TXN_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: TXN_DB_USER
+            - name: TXN_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: TXN_DB_PASSWORD
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: RABBITMQ_USER
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: RABBITMQ_PASSWORD
+            - name: EUREKA_HOST
+              value: eureka-server
+            - name: MINIO_HOST
+              value: minio
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: MINIO_SECRET_KEY
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: budgetbuddy
+spec:
+  selector:
+    app: transaction-service
+  ports:
+    - port: 8082
+      targetPort: 8082
+  type: ClusterIP

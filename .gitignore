@@ -1,0 +1,47 @@
+# ============================================================
+# .gitignore — BudgetBuddy TP DAN 2026
+# ============================================================
+
+# ----- Maven / Java build output -----
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# ----- IDE -----
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.code-workspace
+.classpath
+.project
+.settings/
+*.factorypath
+
+.claude
+.agents
+
+# ----- OS -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Secrets / env (NUNCA subir al repo público) -----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ----- Logs -----
+*.log
+logs/
+
+# ----- Minikube / Kubernetes local -----
+kubeconfig
+.kube/

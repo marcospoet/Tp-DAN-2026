@@ -1,0 +1,319 @@
+# ============================================================
+# ConfigMaps — BudgetBuddy
+#
+# Contiene scripts de inicialización y configuraciones de
+# infraestructura que se montan como archivos en los pods.
+# ============================================================
+
+---
+# ------------------------------------------------------------
+# ConfigMap: init script de PostgreSQL
+# Montado en /docker-entrypoint-initdb.d/ del pod de postgres
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: budgetbuddy
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+
+        CREATE SCHEMA IF NOT EXISTS auth;
+        CREATE SCHEMA IF NOT EXISTS txn;
+
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'auth_user') THEN
+                CREATE ROLE auth_user WITH LOGIN PASSWORD '${AUTH_DB_PASSWORD}';
+            END IF;
+        END
+        \$\$;
+
+        GRANT USAGE ON SCHEMA auth TO auth_user;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO auth_user;
+        GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO auth_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO auth_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO auth_user;
+        REVOKE ALL ON SCHEMA txn FROM auth_user;
+
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'txn_user') THEN
+                CREATE ROLE txn_user WITH LOGIN PASSWORD '${TXN_DB_PASSWORD}';
+            END IF;
+        END
+        \$\$;
+
+        GRANT USAGE ON SCHEMA txn TO txn_user;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA txn TO txn_user;
+        GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA txn TO txn_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON TABLES TO txn_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON SEQUENCES TO txn_user;
+        REVOKE ALL ON SCHEMA auth FROM txn_user;
+
+    EOSQL
+
+---
+# ------------------------------------------------------------
+# ConfigMap: init script de MongoDB
+# Montado en /docker-entrypoint-initdb.d/ del pod de mongodb
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-init
+  namespace: budgetbuddy
+data:
+  init-mongo.js: |
+    const appUser = process.env.MONGO_APP_USER || 'ai_user';
+    const appPassword = process.env.MONGO_APP_PASSWORD || 'ai_pass';
+
+    db = db.getSiblingDB('ai_db');
+
+    db.createUser({
+      user: appUser,
+      pwd: appPassword,
+      roles: [{ role: 'readWrite', db: 'ai_db' }]
+    });
+
+    db.createCollection('chat_sessions');
+    db.createCollection('chat_messages');
+    db.createCollection('analytics_cache');
+
+    db.chat_sessions.createIndex({ userId: 1, updatedAt: -1 });
+    db.chat_messages.createIndex({ sessionId: 1, createdAt: 1 });
+    db.analytics_cache.createIndex({ userId: 1 }, { unique: true });
+
+---
+# ------------------------------------------------------------
+# ConfigMap: Prometheus
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: budgetbuddy
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'eureka-server'
+        static_configs:
+          - targets: ['eureka-server:8761']
+        metrics_path: '/actuator/prometheus'
+
+      - job_name: 'api-gateway'
+        static_configs:
+          - targets: ['api-gateway:8080']
+        metrics_path: '/actuator/prometheus'
+
+      - job_name: 'auth-service'
+        static_configs:
+          - targets: ['auth-service:8081']
+        metrics_path: '/actuator/prometheus'
+
+      - job_name: 'transaction-service'
+        static_configs:
+          - targets: ['transaction-service:8082']
+        metrics_path: '/actuator/prometheus'
+
+      - job_name: 'ai-service'
+        static_configs:
+          - targets: ['ai-service:8083']
+        metrics_path: '/actuator/prometheus'
+
+      - job_name: 'rabbitmq'
+        static_configs:
+          - targets: ['rabbitmq:15692']
+
+---
+# ------------------------------------------------------------
+# ConfigMap: Grafana datasources
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: budgetbuddy
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        editable: true
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo:3200
+        editable: true
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: '-1h'
+            spanEndTimeShift: '1h'
+            filterByTraceID: false
+            filterBySpanID: false
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+
+---
+# ------------------------------------------------------------
+# ConfigMap: Loki
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: budgetbuddy
+data:
+  loki-config.yml: |
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9096
+
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+
+    query_range:
+      results_cache:
+        cache:
+          embedded_cache:
+            enabled: true
+            max_size_mb: 100
+
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    limits_config:
+      ingestion_rate_mb: 4
+      ingestion_burst_size_mb: 6
+
+---
+# ------------------------------------------------------------
+# ConfigMap: Promtail (adaptado para Kubernetes)
+# Lee logs de los pods en /var/log/pods/
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: budgetbuddy
+data:
+  promtail-config.yml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [budgetbuddy]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            separator: /
+            replacement: /var/log/pods/*$1/*.log
+            target_label: __path__
+
+---
+# ------------------------------------------------------------
+# ConfigMap: Tempo
+# ------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: budgetbuddy
+data:
+  tempo-config.yml: |
+    server:
+      http_listen_port: 3200
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    ingester:
+      trace_idle_period: 10s
+      max_block_bytes: 1_000_000
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        compaction_window: 1h
+        max_block_bytes: 100_000_000
+        block_retention: 1h
+        compacted_block_retention: 10m
+
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /tmp/tempo/blocks
+        wal:
+          path: /tmp/tempo/wal
+        pool:
+          max_workers: 100
+          queue_depth: 10000
+
+    query_frontend:
+      search:
+        duration_slo: 5s
+        throughput_bytes_slo: 1.073741824e+09
+      trace_by_id:
+        duration_slo: 5s

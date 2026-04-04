@@ -1,0 +1,75 @@
+# ============================================================
+# API Gateway — Deployment + Service
+#
+# Construir imagen:
+#   eval $(minikube docker-env)
+#   docker build -f microservices/api-gateway/Dockerfile \
+#     -t budgetbuddy/api-gateway:latest ./microservices
+#
+# Tipo NodePort: permite acceder desde fuera del cluster.
+# Acceder con: minikube service api-gateway -n budgetbuddy
+# ============================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: budgetbuddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: budgetbuddy/api-gateway:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: JWT_SECRET
+            - name: EUREKA_HOST
+              value: eureka-server
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+# NodePort: puerto accesible desde fuera del cluster Minikube.
+# nodePort: 30080 → acceder con http://<minikube-ip>:30080
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: budgetbuddy
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  type: NodePort

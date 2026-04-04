@@ -1,0 +1,358 @@
+version: '3.9'
+
+# ============================================================
+# TP DAN 2026 — Arquitectura de Microservicios
+#
+# Orden de arranque (gestionado por depends_on + healthchecks):
+#   1. Infraestructura: postgres, mongodb, rabbitmq, minio
+#   2. Service Discovery: eureka-server
+#   3. Microservicios: auth-service, transaction-service, ai-service
+#   4. API Gateway: api-gateway
+#   5. Observabilidad: prometheus, grafana, loki, tempo, promtail
+# ============================================================
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  rabbitmq_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+services:
+
+  # ============================================================
+  # INFRAESTRUCTURA DE DATOS
+  # ============================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bb-postgres
+    environment:
+      POSTGRES_DB: budgetbuddy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Pasamos las contraseñas de los usuarios de app para que init.sh las use
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      TXN_DB_PASSWORD: ${TXN_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: bb-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ai_db
+      # Usadas por init-mongo.js para crear el usuario de aplicación
+      MONGO_APP_USER: ${MONGO_APP_USER}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
+    volumes:
+      - mongodb_data:/data/db
+      - ./infrastructure/mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+    ports:
+      - "27017:27017"
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: bb-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"    # Management UI: http://localhost:15672
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: bb-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"      # MinIO Console UI: http://localhost:9001
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================
+  # SERVICE DISCOVERY
+  # ============================================================
+
+  eureka-server:
+    build:
+      context: ./microservices
+      dockerfile: eureka-server/Dockerfile
+    container_name: bb-eureka
+    ports:
+      - "8761:8761"      # Dashboard: http://localhost:8761
+    networks:
+      - app-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ============================================================
+  # MICROSERVICIOS
+  # ============================================================
+
+  auth-service:
+    build:
+      context: ./microservices
+      dockerfile: auth-service/Dockerfile
+    container_name: bb-auth
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: budgetbuddy
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_HOST: eureka-server
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8081:8081"
+    networks:
+      - app-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  transaction-service:
+    build:
+      context: ./microservices
+      dockerfile: transaction-service/Dockerfile
+    container_name: bb-transactions
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: budgetbuddy
+      TXN_DB_USER: ${TXN_DB_USER}
+      TXN_DB_PASSWORD: ${TXN_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_HOST: eureka-server
+      MINIO_HOST: minio
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8082:8082"
+    networks:
+      - app-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  ai-service:
+    build:
+      context: ./microservices
+      dockerfile: ai-service/Dockerfile
+    container_name: bb-ai
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_USER: ${MONGO_APP_USER}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      EUREKA_HOST: eureka-server
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8083:8083"
+    networks:
+      - app-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ============================================================
+  # API GATEWAY — punto de entrada único
+  # ============================================================
+
+  api-gateway:
+    build:
+      context: ./microservices
+      dockerfile: api-gateway/Dockerfile
+    container_name: bb-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_HOST: eureka-server
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8080:8080"      # ÚNICO PUERTO PÚBLICO de los microservicios
+    networks:
+      - app-net
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+
+  # ============================================================
+  # FRONTEND
+  # Descomentá este bloque cuando tengas el frontend listo.
+  # Requiere: Dockerfile.frontend en la raíz del proyecto.
+  # ============================================================
+
+  # frontend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.frontend
+  #   container_name: bb-frontend
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:8080
+  #   ports:
+  #     - "3001:3000"
+  #   networks:
+  #     - app-net
+  #   depends_on:
+  #     - api-gateway
+
+  # ============================================================
+  # OBSERVABILIDAD
+  # ============================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bb-prometheus
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"      # UI: http://localhost:9090
+    networks:
+      - app-net
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bb-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"      # UI: http://localhost:3000
+    networks:
+      - app-net
+    depends_on:
+      - prometheus
+
+  loki:
+    image: grafana/loki:latest
+    container_name: bb-loki
+    volumes:
+      - loki_data:/loki
+      - ./infrastructure/loki/loki-config.yml:/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - app-net
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: bb-promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infrastructure/promtail/promtail-config.yml:/etc/promtail/config.yml
+    networks:
+      - app-net
+    depends_on:
+      - loki
+    command: -config.file=/etc/promtail/config.yml
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: bb-tempo
+    volumes:
+      - ./infrastructure/tempo/tempo-config.yml:/etc/tempo.yml
+    ports:
+      - "3200:3200"   # Tempo API / UI
+      - "4317:4317"   # OTLP gRPC (recibe traces de los servicios)
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - app-net
+    command: ["-config.file=/etc/tempo.yml"]

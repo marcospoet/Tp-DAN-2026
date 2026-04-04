@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        POM raíz del proyecto TP DAN 2026.
+        No contiene módulos Spring Boot directamente; sirve como contenedor
+        del directorio microservices/.
+
+        Para compilar todo el proyecto: cd microservices && mvn clean package
+        Para compilar un módulo solo: cd microservices && mvn -pl auth-service clean package
+    -->
+
+    <groupId>com.tp.dan</groupId>
+    <artifactId>tp-dan-2026</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>TP DAN 2026 :: Root</name>
+    <description>TP Integrador DAN 2026 — UTN FRSF — Aplicación distribuida basada en microservicios</description>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+</project>
