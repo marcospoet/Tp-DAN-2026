@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "TP DAN 2026 - BudgetBuddy",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

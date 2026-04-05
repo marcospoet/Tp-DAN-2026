@@ -1,0 +1,20 @@
+meta {
+  name: eliminarTxn
+  type: http
+  seq: 8
+}
+
+delete {
+  url: http://localhost:8082/api/transactions/f96b33b7-2a27-4bc9-b938-fe5a0e1031e4
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+}
+
+settings {
+  encodeUrl: false
+  timeout: 0
+}

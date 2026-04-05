@@ -1,0 +1,25 @@
+meta {
+  name: listarTransacciones
+  type: http
+  seq: 4
+}
+
+get {
+  url: http://localhost:8082/api/transactions?page=0&size=10&sort=date,desc
+  body: none
+  auth: inherit
+}
+
+params:query {
+  page: 0
+  size: 10
+  sort: date,desc
+}
+
+headers {
+  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+}
+
+settings {
+  encodeUrl: false
+}

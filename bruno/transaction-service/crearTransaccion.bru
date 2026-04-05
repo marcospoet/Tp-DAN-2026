@@ -1,0 +1,34 @@
+meta {
+  name: crearTransaccion
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:8082/api/transactions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+}
+
+body:json {
+  {
+    "description": "Supermercado",
+    "amount": 15000.00,
+    "type": "expense",
+    "icon": "cart",
+    "category": "alimentación",
+    "date": "2026-04-05",
+    "currency": "ARS",
+    "exchangeRateType": "blue",
+    "isRecurring": false
+  }
+}
+
+settings {
+  encodeUrl: false
+}

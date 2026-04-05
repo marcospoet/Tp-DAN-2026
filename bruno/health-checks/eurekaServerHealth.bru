@@ -1,0 +1,15 @@
+meta {
+  name: eurekaServerHealth
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://localhost:8761/actuator/health
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: false
+}
