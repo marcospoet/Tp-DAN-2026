@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: http://localhost:8082/api/transactions?from=2026-04-01&to=2026-04-30&page=0&size=10
+  url: http://localhost:8082/api/transactions
   body: none
   auth: inherit
 }
@@ -18,10 +18,11 @@ params:query {
 }
 
 headers {
-  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
 }
 
 settings {
   encodeUrl: false
-  timeout: 0
+  timeout: 5000
 }

@@ -5,16 +5,17 @@ meta {
 }
 
 delete {
-  url: http://localhost:8082/api/transactions/f96b33b7-2a27-4bc9-b938-fe5a0e1031e4
+  url: http://localhost:8082/api/transactions/{{txnId}}
   body: none
   auth: inherit
 }
 
 headers {
-  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
 }
 
 settings {
   encodeUrl: false
-  timeout: 0
+  timeout: 5000
 }

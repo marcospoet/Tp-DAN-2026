@@ -5,14 +5,15 @@ meta {
 }
 
 put {
-  url: http://localhost:8082/api/transactions/c7368988-303d-4961-9dbd-1bc08709c39d
+  url: http://localhost:8082/api/transactions/{{txnId}}
   body: json
   auth: inherit
 }
 
 headers {
   Content-Type: application/json
-  X-User-Id: 550e8400-e29b-41d4-a716-446655440000
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
 }
 
 body:json {
@@ -24,5 +25,5 @@ body:json {
 
 settings {
   encodeUrl: false
-  timeout: 0
+  timeout: 5000
 }
