@@ -345,7 +345,7 @@ services:
     command: -config.file=/etc/promtail/config.yml
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:3.0.0
     container_name: bb-tempo
     volumes:
       - ./infrastructure/tempo/tempo-config.yml:/etc/tempo.yml
