@@ -1,6 +1,8 @@
 package com.budgetbuddy.auth.service.impl;
 
 import com.budgetbuddy.auth.dto.*;
+import com.budgetbuddy.auth.exception.EmailAlreadyRegisteredException;
+import com.budgetbuddy.auth.exception.UserNotFoundException;
 import com.budgetbuddy.auth.entity.Profile;
 import com.budgetbuddy.auth.entity.User;
 import com.budgetbuddy.auth.messaging.UserEventPublisher;
@@ -30,7 +32,7 @@ public class AuthServiceImpl implements IAuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException("Email already registered: " + request.email());
+            throw new EmailAlreadyRegisteredException(request.email());
         }
 
         User user = User.builder()
@@ -79,7 +81,7 @@ public class AuthServiceImpl implements IAuthService {
     @Transactional(readOnly = true)
     public ProfileResponse getProfile(String email) {
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            .orElseThrow(() -> new UserNotFoundException(email));
         Profile p = user.getProfile();
         return new ProfileResponse(
             user.getId(), user.getEmail(),
@@ -93,7 +95,7 @@ public class AuthServiceImpl implements IAuthService {
     @Transactional
     public ProfileResponse updateProfile(String email, UpdateProfileRequest request) {
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            .orElseThrow(() -> new UserNotFoundException(email));
         Profile p = user.getProfile();
 
         if (request.userName() != null)         p.setUserName(request.userName());
@@ -118,7 +120,7 @@ public class AuthServiceImpl implements IAuthService {
     @Transactional
     public void deleteUser(String email) {
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            .orElseThrow(() -> new UserNotFoundException(email));
         UUID userId = user.getId();
         userRepository.delete(user);
         eventPublisher.publishUserDeleted(userId, email);

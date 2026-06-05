@@ -49,6 +49,12 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
 
+        <!-- AOP para aspectos transversales (logging, auditoría, ownership, métricas) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- WebFlux (WebClient) para llamar a DolarAPI — no reemplaza el stack MVC -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

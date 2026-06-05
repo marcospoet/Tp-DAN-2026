@@ -1,6 +1,7 @@
 package com.budgetbuddy.transaction.service;
 
 import com.budgetbuddy.transaction.dto.ExchangeRateResponse;
+import com.budgetbuddy.transaction.exception.ExchangeRateException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,7 @@ public class ExchangeRateService {
                 .block();
 
         if (rates == null || rates.isEmpty()) {
-            throw new RuntimeException("No se pudieron obtener las cotizaciones de DolarAPI");
+            throw new ExchangeRateException("No se pudieron obtener las cotizaciones de DolarAPI");
         }
 
         return rates.stream()
@@ -55,7 +56,7 @@ public class ExchangeRateService {
         return getAllRates().stream()
                 .filter(r -> r.type().equalsIgnoreCase(type))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Cotización no encontrada: " + type));
+                .orElseThrow(() -> new ExchangeRateException("Cotización no encontrada: " + type));
     }
 
     /**
@@ -65,7 +66,7 @@ public class ExchangeRateService {
     public BigDecimal convertArsToUsd(BigDecimal amountArs, String exchangeRateType) {
         ExchangeRateResponse rate = getRate(exchangeRateType);
         if (rate.sellPrice().compareTo(BigDecimal.ZERO) == 0) {
-            throw new RuntimeException("Precio de venta es 0 para: " + exchangeRateType);
+            throw new ExchangeRateException("Precio de venta es 0 para: " + exchangeRateType);
         }
         return amountArs.divide(rate.sellPrice(), 2, RoundingMode.HALF_UP);
     }

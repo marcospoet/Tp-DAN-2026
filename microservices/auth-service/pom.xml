@@ -69,6 +69,12 @@
             <artifactId>jjwt-jackson</artifactId>
         </dependency>
 
+        <!-- AOP para aspectos transversales (logging, manejo de excepciones) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- Mensajeria asincrona con RabbitMQ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

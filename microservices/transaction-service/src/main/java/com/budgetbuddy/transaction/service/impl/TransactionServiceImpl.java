@@ -1,9 +1,11 @@
 package com.budgetbuddy.transaction.service.impl;
 
+import com.budgetbuddy.transaction.aspect.RequireOwnership;
 import com.budgetbuddy.transaction.dto.CreateTransactionRequest;
 import com.budgetbuddy.transaction.dto.TransactionResponse;
 import com.budgetbuddy.transaction.dto.UpdateTransactionRequest;
 import com.budgetbuddy.transaction.entity.Transaction;
+import com.budgetbuddy.transaction.exception.TransactionNotFoundException;
 import com.budgetbuddy.transaction.messaging.TransactionEventPublisher;
 import com.budgetbuddy.transaction.repository.TransactionRepository;
 import com.budgetbuddy.transaction.service.ExchangeRateService;
@@ -44,7 +46,6 @@ public class TransactionServiceImpl implements ITransactionService {
                 .isRecurring(request.isRecurring())
                 .build();
 
-        // Si es ARS y pidió cotización, calcular equivalente en USD
         if ("ARS".equalsIgnoreCase(request.currency()) && request.exchangeRateType() != null) {
             try {
                 transaction.setTxRate(exchangeRateService.getSellRate(request.exchangeRateType()));
@@ -56,39 +57,33 @@ public class TransactionServiceImpl implements ITransactionService {
         }
 
         Transaction saved = transactionRepository.save(transaction);
-        log.info("Transacción creada: id={}, userId={}, amount={} {}",
-                saved.getId(), userId, saved.getAmount(), saved.getCurrency());
-
         eventPublisher.publishTransactionCreated(saved);
-
         return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
+    @RequireOwnership
     public TransactionResponse getById(UUID userId, UUID transactionId) {
-        Transaction transaction = findByIdAndValidateOwner(userId, transactionId);
-        return toResponse(transaction);
+        return toResponse(transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId)));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<TransactionResponse> list(UUID userId, LocalDate from, LocalDate to, Pageable pageable) {
-        Page<Transaction> page;
-
-        if (from != null && to != null) {
-            page = transactionRepository.findByUserIdAndDateBetween(userId, from, to, pageable);
-        } else {
-            page = transactionRepository.findByUserId(userId, pageable);
-        }
-
+        Page<Transaction> page = (from != null && to != null)
+                ? transactionRepository.findByUserIdAndDateBetween(userId, from, to, pageable)
+                : transactionRepository.findByUserId(userId, pageable);
         return page.map(this::toResponse);
     }
 
     @Override
     @Transactional
+    @RequireOwnership
     public TransactionResponse update(UUID userId, UUID transactionId, UpdateTransactionRequest request) {
-        Transaction transaction = findByIdAndValidateOwner(userId, transactionId);
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId));
 
         if (request.description() != null) transaction.setDescription(request.description());
         if (request.amount() != null)      transaction.setAmount(request.amount());
@@ -102,7 +97,6 @@ public class TransactionServiceImpl implements ITransactionService {
 
         if (request.exchangeRateType() != null) {
             transaction.setExchangeRateType(request.exchangeRateType());
-            // Recalcular USD si cambió el tipo de cotización o el monto
             if ("ARS".equalsIgnoreCase(transaction.getCurrency())) {
                 transaction.setTxRate(exchangeRateService.getSellRate(request.exchangeRateType()));
                 transaction.setAmountUsd(exchangeRateService.convertArsToUsd(
@@ -112,14 +106,15 @@ public class TransactionServiceImpl implements ITransactionService {
 
         Transaction saved = transactionRepository.save(transaction);
         log.info("Transacción actualizada: id={}, userId={}", transactionId, userId);
-
         return toResponse(saved);
     }
 
     @Override
     @Transactional
+    @RequireOwnership
     public void delete(UUID userId, UUID transactionId) {
-        Transaction transaction = findByIdAndValidateOwner(userId, transactionId);
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new TransactionNotFoundException(transactionId));
         transactionRepository.delete(transaction);
         log.info("Transacción eliminada: id={}, userId={}", transactionId, userId);
     }
@@ -129,19 +124,6 @@ public class TransactionServiceImpl implements ITransactionService {
     public void deleteAllByUser(UUID userId) {
         transactionRepository.deleteAllByUserId(userId);
         log.info("Todas las transacciones eliminadas para userId={}", userId);
-    }
-
-    // ── Métodos privados ─────────────────────────────────────
-
-    private Transaction findByIdAndValidateOwner(UUID userId, UUID transactionId) {
-        Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new RuntimeException("Transacción no encontrada: " + transactionId));
-
-        if (!transaction.getUserId().equals(userId)) {
-            throw new RuntimeException("No tenés acceso a esta transacción");
-        }
-
-        return transaction;
     }
 
     private TransactionResponse toResponse(Transaction t) {
