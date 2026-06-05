@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: tempo
-          image: grafana/tempo:latest
+          image: grafana/tempo:3.0.0
           args: ["-config.file=/etc/tempo.yml"]
           ports:
             - containerPort: 3200   # Tempo API / UI

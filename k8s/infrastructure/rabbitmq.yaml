@@ -22,6 +22,8 @@ metadata:
   namespace: budgetbuddy
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: rabbitmq
@@ -36,6 +38,7 @@ spec:
           ports:
             - containerPort: 5672   # AMQP
             - containerPort: 15672  # Management UI
+            - containerPort: 15692  # Prometheus metrics
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
@@ -50,11 +53,15 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/rabbitmq
+            - name: plugins
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
           readinessProbe:
-            exec:
-              command: ["rabbitmq-diagnostics", "ping"]
+            tcpSocket:
+              port: 5672
             initialDelaySeconds: 20
-            periodSeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
           resources:
             requests:
               memory: "256Mi"
@@ -66,6 +73,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: rabbitmq-pvc
+        - name: plugins
+          configMap:
+            name: rabbitmq-plugins
 
 ---
 apiVersion: v1
@@ -83,4 +93,7 @@ spec:
     - name: management
       port: 15672
       targetPort: 15672
+    - name: prometheus
+      port: 15692
+      targetPort: 15692
   type: ClusterIP

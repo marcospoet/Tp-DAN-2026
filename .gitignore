@@ -33,6 +33,8 @@ desktop.ini
 .env
 .env.*
 !.env.example
+k8s/01-secrets.yaml
+!k8s/01-secrets.example.yaml
 *.pem
 *.key
 *.p12

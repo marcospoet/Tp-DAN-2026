@@ -69,7 +69,13 @@ cp .env.example .env
 Editar `.env` y reemplazar todos los valores `cambiar_en_produccion`.  
 Generar el JWT secret con:
 
+```powershell
+# PowerShell
+[System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(64)).Replace('-','').ToLower()
+```
+
 ```bash
+# Linux / Mac / WSL
 openssl rand -hex 64
 ```
 
@@ -242,12 +248,14 @@ Cada microservicio expone métricas en `/actuator/prometheus`.
 Para correr un microservicio de forma aislada, levantá la infraestructura con Docker y corré el servicio con Maven:
 
 ```bash
-# Levantar solo la infraestructura
+# Desde la raíz del repo — levanta solo la infraestructura
 docker compose up postgres rabbitmq eureka-server -d
+```
 
-# Correr auth-service con perfil local
+```bash
+# Desde microservices/ — corre el servicio
 cd microservices
-mvn -pl auth-service spring-boot:run -Dspring-boot.run.profiles=local
+mvn -pl auth-service spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
 El perfil `local` usa las credenciales definidas en `application-local.properties`.
@@ -273,6 +281,13 @@ tp-dan-2026/
 │   ├── loki/
 │   ├── tempo/
 │   └── promtail/
+├── k8s/
+│   ├── 00-namespace.yaml
+│   ├── 01-secrets.yaml
+│   ├── 02-configmaps.yaml
+│   ├── infrastructure/          ← postgres, mongodb, rabbitmq, minio
+│   │   └── observability/       ← prometheus, grafana, loki, tempo, promtail
+│   └── microservices/           ← eureka, api-gateway, auth, transaction, ai
 ├── bruno/                       ← Colección de requests para testing manual
 │   ├── environments/
 │   │   └── local.bru
@@ -281,6 +296,196 @@ tp-dan-2026/
 ├── docker-compose.yml
 ├── .env.example                 ← Plantilla de variables de entorno
 └── README.md
+```
+
+---
+
+## Kubernetes
+
+Los manifiestos en `k8s/` están listos para cualquier cluster K8s (Minikube, EKS, GKE, AKS).
+
+### Probar en local con Minikube
+
+**Requisitos:** [Minikube](https://minikube.sigs.k8s.io/docs/start/) y kubectl instalados.
+
+**1. Arrancar Minikube con recursos suficientes**
+
+```bash
+minikube start --memory=6144 --cpus=4
+minikube status
+```
+
+**2. Apuntar Docker al daemon interno de Minikube**
+
+Este paso es el más importante. Hace que las imágenes que buildees queden dentro del cluster en vez de en tu Docker local.
+
+```bash
+# Linux/Mac/WSL
+eval $(minikube docker-env)
+
+# PowerShell
+minikube docker-env | Invoke-Expression
+
+# Verificar que apunta al daemon correcto
+docker info | grep Name   # debe mostrar "minikube"
+```
+
+> Este paso es por sesión de terminal. Si abrís una terminal nueva, repetilo antes de buildear.
+
+**3. Buildear las imágenes dentro de Minikube**
+
+Desde la raíz del repositorio:
+
+```bash
+docker build -f microservices/eureka-server/Dockerfile     -t budgetbuddy/eureka-server:latest     ./microservices
+docker build -f microservices/auth-service/Dockerfile      -t budgetbuddy/auth-service:latest      ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t budgetbuddy/transaction-service:latest ./microservices
+docker build -f microservices/ai-service/Dockerfile        -t budgetbuddy/ai-service:latest        ./microservices
+docker build -f microservices/api-gateway/Dockerfile       -t budgetbuddy/api-gateway:latest       ./microservices
+
+# Verificar que quedaron disponibles
+docker images | grep budgetbuddy
+```
+
+**4. Crear y configurar `k8s/01-secrets.yaml`**
+
+El archivo de secrets no está commiteado (está en `.gitignore`). Copiarlo desde el ejemplo y completar los valores:
+
+```bash
+cp k8s/01-secrets.example.yaml k8s/01-secrets.yaml
+```
+
+Generar un JWT_SECRET seguro de al menos 64 caracteres:
+
+```powershell
+# PowerShell (Windows)
+[System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(64)).Replace('-','').ToLower()
+```
+
+```bash
+# Linux / Mac / WSL
+openssl rand -hex 64
+```
+
+Pegar el valor generado en `k8s/01-secrets.yaml` reemplazando el campo `JWT_SECRET`.  
+Reemplazar también todos los demás valores `CHANGE_ME` con credenciales reales.
+
+**5. Aplicar los manifiestos en orden**
+
+```bash
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/01-secrets.yaml
+kubectl apply -f k8s/02-configmaps.yaml
+kubectl apply -f k8s/infrastructure/
+kubectl apply -f k8s/infrastructure/observability/
+```
+
+Esperar a que la infraestructura esté lista:
+
+```bash
+kubectl wait --for=condition=ready pod -l app=postgres  -n budgetbuddy --timeout=180s
+kubectl wait --for=condition=ready pod -l app=rabbitmq  -n budgetbuddy --timeout=180s
+kubectl wait --for=condition=ready pod -l app=mongodb   -n budgetbuddy --timeout=180s
+```
+
+Luego levantar los microservicios:
+
+```bash
+kubectl apply -f k8s/microservices/
+```
+
+**6. Verificar el estado**
+
+```bash
+kubectl get pods -n budgetbuddy
+```
+
+Todos deben llegar a `Running`. Si alguno queda en `CrashLoopBackOff`:
+
+```bash
+kubectl logs -n budgetbuddy deployment/auth-service
+kubectl describe pod -n budgetbuddy -l app=auth-service
+```
+
+**7. Acceder a los servicios**
+
+Los servicios son `ClusterIP` (internos al cluster). Para acceder desde el navegador usar port-forward:
+
+```bash
+# API Gateway — mismo puerto que docker-compose
+kubectl port-forward -n budgetbuddy svc/api-gateway 8080:8080
+
+# Grafana
+kubectl port-forward -n budgetbuddy svc/grafana 3000:3000
+
+# Eureka Dashboard
+kubectl port-forward -n budgetbuddy svc/eureka-server 8761:8761
+
+# RabbitMQ Management
+kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672
+```
+
+Con el port-forward del gateway activo, la colección de Bruno funciona sin cambios (sigue apuntando a `localhost:8080`).
+
+**Destruir el entorno**
+
+```bash
+kubectl delete namespace budgetbuddy
+```
+
+---
+
+### Desplegar en producción
+
+**1. Buildear y publicar las imágenes en un registry**
+
+```bash
+# Ejemplo con Docker Hub (reemplazar "tu-org" con tu usuario/organización)
+docker build -f microservices/auth-service/Dockerfile      -t tu-org/budgetbuddy-auth:1.0.0      ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t tu-org/budgetbuddy-transaction:1.0.0 ./microservices
+docker build -f microservices/api-gateway/Dockerfile       -t tu-org/budgetbuddy-gateway:1.0.0   ./microservices
+docker build -f microservices/eureka-server/Dockerfile     -t tu-org/budgetbuddy-eureka:1.0.0    ./microservices
+docker build -f microservices/ai-service/Dockerfile        -t tu-org/budgetbuddy-ai:1.0.0        ./microservices
+
+docker push tu-org/budgetbuddy-auth:1.0.0
+docker push tu-org/budgetbuddy-transaction:1.0.0
+docker push tu-org/budgetbuddy-gateway:1.0.0
+docker push tu-org/budgetbuddy-eureka:1.0.0
+docker push tu-org/budgetbuddy-ai:1.0.0
+```
+
+**2. Actualizar los nombres de imagen en los yamls**
+
+En cada archivo de `k8s/microservices/` cambiar el campo `image:` para que apunte al registry:
+
+```yaml
+# Antes (local)
+image: budgetbuddy/auth-service:latest
+
+# Después (producción)
+image: tu-org/budgetbuddy-auth:1.0.0
+```
+
+Los archivos a editar son los 5 de `k8s/microservices/`.
+
+**3. Secretos de producción**
+
+Reemplazar **todos** los valores en `k8s/01-secrets.yaml` con credenciales reales antes de aplicar.  
+El archivo tiene comentarios indicando cada uno.
+
+**4. Aplicar los manifiestos**
+
+El orden es el mismo que en local (pasos 5 en adelante del apartado anterior).  
+El cluster K8s se encarga de bajar las imágenes del registry automáticamente (`imagePullPolicy: IfNotPresent`).
+
+**5. Exponer el API Gateway**
+
+En producción reemplazar el `Service` de tipo `NodePort` del api-gateway por un `LoadBalancer` o agregar un `Ingress`:
+
+```yaml
+# k8s/microservices/api-gateway.yaml — cambiar el tipo del Service
+spec:
+  type: LoadBalancer   # en vez de NodePort
 ```
 
 ---

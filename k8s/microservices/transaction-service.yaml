@@ -26,7 +26,7 @@ spec:
       containers:
         - name: transaction-service
           image: budgetbuddy/transaction-service:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082
           env:

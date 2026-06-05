@@ -22,6 +22,8 @@ metadata:
   namespace: budgetbuddy
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mongodb
@@ -64,10 +66,11 @@ spec:
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
           readinessProbe:
-            exec:
-              command: ["mongosh", "--eval", "db.adminCommand('ping')"]
-            initialDelaySeconds: 15
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 20
             periodSeconds: 10
+            failureThreshold: 5
           resources:
             requests:
               memory: "256Mi"
