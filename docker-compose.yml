@@ -225,6 +225,11 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_HOST: eureka-server
       SPRING_PROFILES_ACTIVE: docker
+      # AI provider config — server-side API keys
+      AI_PROVIDER: ${AI_PROVIDER:-claude}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
       - "8083:8083"
     networks:
@@ -264,26 +269,37 @@ services:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
   # ============================================================
-  # FRONTEND
-  # Descomentá este bloque cuando tengas el frontend listo.
-  # Requiere: Dockerfile.frontend en la raíz del proyecto.
+  # FRONTEND — Next.js (puerto 3001 para no colisionar con Grafana:3000)
+  # BACKEND_URL es server-side; el proxy /api/* lo reenvía al gateway
   # ============================================================
 
-  # frontend:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.frontend
-  #   container_name: bb-frontend
-  #   environment:
-  #     NEXT_PUBLIC_API_URL: http://localhost:8080
-  #   ports:
-  #     - "3001:3000"
-  #   networks:
-  #     - app-net
-  #   depends_on:
-  #     - api-gateway
+  frontend-service:
+    build:
+      context: ./microservices/frontend-service
+      dockerfile: Dockerfile
+    container_name: bb-frontend
+    environment:
+      BACKEND_URL: http://api-gateway:8080
+    ports:
+      - "3001:3000"
+    networks:
+      - app-net
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # ============================================================
   # OBSERVABILIDAD

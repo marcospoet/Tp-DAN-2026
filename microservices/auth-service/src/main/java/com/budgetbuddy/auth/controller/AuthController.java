@@ -79,6 +79,21 @@ public class AuthController {
         return ResponseEntity.ok(authService.updateProfile(user.getUsername(), request));
     }
 
+    @Operation(summary = "Cambiar contraseña del usuario autenticado")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Contraseña actualizada"),
+        @ApiResponse(responseCode = "400", description = "Contraseña actual incorrecta o nueva contraseña muy corta")
+    })
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+        @AuthenticationPrincipal UserDetails user,
+        @RequestBody ChangePasswordRequest request
+    ) {
+        authService.changePassword(user.getUsername(), request);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Eliminar cuenta del usuario autenticado", description = "Borra usuario y perfil, y publica evento user.deleted en RabbitMQ")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponse(responseCode = "204", description = "Usuario eliminado")

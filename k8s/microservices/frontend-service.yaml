@@ -1,0 +1,68 @@
+# ============================================================
+# Frontend Service — Deployment + Service
+#
+# Construir imagen (desde la raíz del repo):
+#   eval $(minikube docker-env)
+#   docker build -f microservices/frontend-service/Dockerfile \
+#     -t budgetbuddy/frontend-service:latest ./microservices/frontend-service
+#
+# Tipo NodePort: el browser necesita acceso externo al cluster.
+# Acceder con: minikube service frontend-service -n budgetbuddy
+# ============================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-service
+  namespace: budgetbuddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-service
+  template:
+    metadata:
+      labels:
+        app: frontend-service
+    spec:
+      containers:
+        - name: frontend-service
+          image: budgetbuddy/frontend-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: BACKEND_URL
+              value: http://api-gateway:8080
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+
+---
+# NodePort: accesible desde el browser fuera del cluster Minikube.
+# nodePort: 30300 → http://<minikube-ip>:30300
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: budgetbuddy
+spec:
+  selector:
+    app: frontend-service
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30300
+  type: NodePort

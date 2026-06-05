@@ -11,5 +11,6 @@ public record UpdateProfileRequest(
     String aiProvider,
     String apiKeyClaude,
     String apiKeyOpenai,
-    String apiKeyGemini
+    String apiKeyGemini,
+    String defaultAccount
 ) {}

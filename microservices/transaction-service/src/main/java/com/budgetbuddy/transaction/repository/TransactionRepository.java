@@ -14,6 +14,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     Page<Transaction> findByUserIdAndDateBetween(UUID userId, LocalDate from, LocalDate to, Pageable pageable);
 
+    Page<Transaction> findByUserIdAndDateGreaterThanEqual(UUID userId, LocalDate from, Pageable pageable);
+
+    Page<Transaction> findByUserIdAndDateLessThanEqual(UUID userId, LocalDate to, Pageable pageable);
+
     void deleteAllByUserId(UUID userId);
 }
 

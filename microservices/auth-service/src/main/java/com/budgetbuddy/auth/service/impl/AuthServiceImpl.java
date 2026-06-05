@@ -3,6 +3,7 @@ package com.budgetbuddy.auth.service.impl;
 import com.budgetbuddy.auth.dto.*;
 import com.budgetbuddy.auth.exception.EmailAlreadyRegisteredException;
 import com.budgetbuddy.auth.exception.UserNotFoundException;
+import org.springframework.security.authentication.BadCredentialsException;
 import com.budgetbuddy.auth.entity.Profile;
 import com.budgetbuddy.auth.entity.User;
 import com.budgetbuddy.auth.messaging.UserEventPublisher;
@@ -83,12 +84,7 @@ public class AuthServiceImpl implements IAuthService {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UserNotFoundException(email));
         Profile p = user.getProfile();
-        return new ProfileResponse(
-            user.getId(), user.getEmail(),
-            p.getUserName(), p.getMonthlyBudget(),
-            p.getProfileMode(), p.getExchangeRateMode(),
-            p.getUsdRate(), p.getAiProvider()
-        );
+        return toProfileResponse(user, p);
     }
 
     @Override
@@ -107,13 +103,24 @@ public class AuthServiceImpl implements IAuthService {
         if (request.apiKeyClaude() != null)     p.setApiKeyClaude(request.apiKeyClaude());
         if (request.apiKeyOpenai() != null)     p.setApiKeyOpenai(request.apiKeyOpenai());
         if (request.apiKeyGemini() != null)     p.setApiKeyGemini(request.apiKeyGemini());
+        if (request.defaultAccount() != null)   p.setDefaultAccount(request.defaultAccount());
 
-        return new ProfileResponse(
-            user.getId(), user.getEmail(),
-            p.getUserName(), p.getMonthlyBudget(),
-            p.getProfileMode(), p.getExchangeRateMode(),
-            p.getUsdRate(), p.getAiProvider()
-        );
+        return toProfileResponse(user, p);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String email, ChangePasswordRequest request) {
+        if (request.newPassword() == null || request.newPassword().length() < 6) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
+        }
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserNotFoundException(email));
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("La contraseña actual es incorrecta.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
     }
 
     @Override
@@ -124,5 +131,14 @@ public class AuthServiceImpl implements IAuthService {
         UUID userId = user.getId();
         userRepository.delete(user);
         eventPublisher.publishUserDeleted(userId, email);
+    }
+
+    private ProfileResponse toProfileResponse(User user, Profile p) {
+        return new ProfileResponse(
+            user.getId(), user.getEmail(),
+            p.getUserName(), p.getMonthlyBudget(),
+            p.getProfileMode(), p.getExchangeRateMode(),
+            p.getUsdRate(), p.getAiProvider(), p.getDefaultAccount()
+        );
     }
 }

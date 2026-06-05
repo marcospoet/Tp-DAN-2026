@@ -13,5 +13,7 @@ public record UpdateTransactionRequest(
         String observation,
         String currency,
         String exchangeRateType,
+        String account,
+        String recurringFrequency,
         Boolean isRecurring
 ) {}

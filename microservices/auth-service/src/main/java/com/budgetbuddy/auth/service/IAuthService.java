@@ -8,5 +8,6 @@ public interface IAuthService {
     ValidateResponse validate(String token);
     ProfileResponse getProfile(String email);
     ProfileResponse updateProfile(String email, UpdateProfileRequest request);
+    void changePassword(String email, ChangePasswordRequest request);
     void deleteUser(String email);
 }

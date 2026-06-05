@@ -11,5 +11,6 @@ public record ProfileResponse(
     String profileMode,
     String exchangeRateMode,
     BigDecimal usdRate,
-    String aiProvider
+    String aiProvider,
+    String defaultAccount
 ) {}

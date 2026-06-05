@@ -20,6 +20,8 @@ public record TransactionResponse(
         BigDecimal txRate,
         String exchangeRateType,
         String receiptUrl,
+        String account,
+        String recurringFrequency,
         boolean isRecurring,
         Instant createdAt,
         Instant updatedAt

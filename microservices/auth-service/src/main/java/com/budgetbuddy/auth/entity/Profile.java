@@ -52,6 +52,10 @@ public class Profile {
     @Column(name = "api_key_gemini")
     private String apiKeyGemini;
 
+    @Column(name = "default_account", nullable = false)
+    @Builder.Default
+    private String defaultAccount = "Efectivo";
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

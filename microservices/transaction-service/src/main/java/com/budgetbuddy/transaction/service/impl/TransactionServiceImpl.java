@@ -41,12 +41,20 @@ public class TransactionServiceImpl implements ITransactionService {
                 .category(request.category())
                 .date(request.date())
                 .observation(request.observation())
-                .currency(request.currency())
+                .currency(request.currency() != null ? request.currency() : "ARS")
                 .exchangeRateType(request.exchangeRateType())
+                .account(request.account() != null ? request.account() : "Efectivo")
+                .recurringFrequency(request.recurringFrequency())
                 .isRecurring(request.isRecurring())
                 .build();
 
-        if ("ARS".equalsIgnoreCase(request.currency()) && request.exchangeRateType() != null) {
+        if (request.amountUsd() != null) {
+            transaction.setAmountUsd(request.amountUsd());
+        }
+        if (request.txRate() != null) {
+            transaction.setTxRate(request.txRate());
+        }
+        if (transaction.getAmountUsd() == null && "ARS".equalsIgnoreCase(transaction.getCurrency()) && request.exchangeRateType() != null) {
             try {
                 transaction.setTxRate(exchangeRateService.getSellRate(request.exchangeRateType()));
                 transaction.setAmountUsd(exchangeRateService.convertArsToUsd(
@@ -72,9 +80,16 @@ public class TransactionServiceImpl implements ITransactionService {
     @Override
     @Transactional(readOnly = true)
     public Page<TransactionResponse> list(UUID userId, LocalDate from, LocalDate to, Pageable pageable) {
-        Page<Transaction> page = (from != null && to != null)
-                ? transactionRepository.findByUserIdAndDateBetween(userId, from, to, pageable)
-                : transactionRepository.findByUserId(userId, pageable);
+        Page<Transaction> page;
+        if (from != null && to != null) {
+            page = transactionRepository.findByUserIdAndDateBetween(userId, from, to, pageable);
+        } else if (from != null) {
+            page = transactionRepository.findByUserIdAndDateGreaterThanEqual(userId, from, pageable);
+        } else if (to != null) {
+            page = transactionRepository.findByUserIdAndDateLessThanEqual(userId, to, pageable);
+        } else {
+            page = transactionRepository.findByUserId(userId, pageable);
+        }
         return page.map(this::toResponse);
     }
 
@@ -85,15 +100,17 @@ public class TransactionServiceImpl implements ITransactionService {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
 
-        if (request.description() != null) transaction.setDescription(request.description());
-        if (request.amount() != null)      transaction.setAmount(request.amount());
-        if (request.type() != null)        transaction.setType(request.type());
-        if (request.icon() != null)        transaction.setIcon(request.icon());
-        if (request.category() != null)    transaction.setCategory(request.category());
-        if (request.date() != null)        transaction.setDate(request.date());
-        if (request.observation() != null) transaction.setObservation(request.observation());
-        if (request.currency() != null)    transaction.setCurrency(request.currency());
-        if (request.isRecurring() != null) transaction.setRecurring(request.isRecurring());
+        if (request.description() != null)        transaction.setDescription(request.description());
+        if (request.amount() != null)              transaction.setAmount(request.amount());
+        if (request.type() != null)                transaction.setType(request.type());
+        if (request.icon() != null)                transaction.setIcon(request.icon());
+        if (request.category() != null)            transaction.setCategory(request.category());
+        if (request.date() != null)                transaction.setDate(request.date());
+        if (request.observation() != null)         transaction.setObservation(request.observation());
+        if (request.currency() != null)            transaction.setCurrency(request.currency());
+        if (request.account() != null)             transaction.setAccount(request.account());
+        if (request.recurringFrequency() != null)  transaction.setRecurringFrequency(request.recurringFrequency());
+        if (request.isRecurring() != null)         transaction.setRecurring(request.isRecurring());
 
         if (request.exchangeRateType() != null) {
             transaction.setExchangeRateType(request.exchangeRateType());
@@ -142,6 +159,8 @@ public class TransactionServiceImpl implements ITransactionService {
                 t.getTxRate(),
                 t.getExchangeRateType(),
                 t.getReceiptUrl(),
+                t.getAccount(),
+                t.getRecurringFrequency(),
                 t.isRecurring(),
                 t.getCreatedAt(),
                 t.getUpdatedAt()

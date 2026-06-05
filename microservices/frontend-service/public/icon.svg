@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Rounded dark background -->
+  <rect width="32" height="32" rx="8" fill="#0f172a"/>
+
+  <!-- Wallet body -->
+  <rect x="4" y="11" width="24" height="15" rx="3" fill="#34d399"/>
+
+  <!-- Top flap -->
+  <path d="M7 11V9C7 7.9 7.9 7 9 7H23C24.1 7 25 7.9 25 9V11H7Z" fill="#34d399"/>
+
+  <!-- Horizontal separator between flap and body -->
+  <rect x="4" y="14.5" width="24" height="1" fill="#0f172a" opacity="0.2"/>
+
+  <!-- Card slot on right -->
+  <rect x="19.5" y="16" width="8" height="7" rx="2" fill="#0f172a" opacity="0.35"/>
+
+  <!-- Coin dot in slot -->
+  <circle cx="23.5" cy="19.5" r="2" fill="#34d399"/>
+</svg>

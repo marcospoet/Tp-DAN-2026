@@ -1,0 +1,2 @@
+ALTER TABLE profiles
+    ADD COLUMN IF NOT EXISTS default_account VARCHAR(100) NOT NULL DEFAULT 'Efectivo';

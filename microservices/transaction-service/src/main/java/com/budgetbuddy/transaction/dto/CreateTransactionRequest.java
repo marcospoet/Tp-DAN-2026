@@ -12,6 +12,10 @@ public record CreateTransactionRequest(
         LocalDate date,
         String observation,
         String currency,
+        BigDecimal amountUsd,
+        BigDecimal txRate,
         String exchangeRateType,
+        String account,
+        String recurringFrequency,
         boolean isRecurring
 ) {}

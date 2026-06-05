@@ -54,6 +54,13 @@ public class Transaction {
     @Column(name = "receipt_url")
     private String receiptUrl;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private String account = "Efectivo";
+
+    @Column(name = "recurring_frequency")
+    private String recurringFrequency;
+
     @Column(name = "is_recurring", nullable = false)
     @Builder.Default
     private boolean isRecurring = false;
