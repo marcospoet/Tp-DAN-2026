@@ -2,6 +2,8 @@ package com.budgetbuddy.transaction.service;
 
 import com.budgetbuddy.transaction.dto.ExchangeRateResponse;
 import com.budgetbuddy.transaction.exception.ExchangeRateException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class ExchangeRateService {
+
+    private static final String DOLAR_API = "dolar-api";
 
     private final WebClient dolarApiClient;
 
@@ -32,6 +36,8 @@ public class ExchangeRateService {
     /**
      * Obtiene todas las cotizaciones del dólar (blue, oficial, tarjeta, mep, etc.)
      */
+    @CircuitBreaker(name = DOLAR_API, fallbackMethod = "getAllRatesFallback")
+    @Retry(name = DOLAR_API)
     public List<ExchangeRateResponse> getAllRates() {
         List<DolarApiRate> rates = dolarApiClient.get()
                 .uri("/dolares")
@@ -47,6 +53,11 @@ public class ExchangeRateService {
         return rates.stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private List<ExchangeRateResponse> getAllRatesFallback(Exception e) {
+        log.error("DolarAPI no disponible (circuit breaker abierto o reintentos agotados): {}", e.getMessage());
+        throw new ExchangeRateException("DolarAPI no disponible temporalmente. Intente nuevamente en unos minutos.");
     }
 
     /**
