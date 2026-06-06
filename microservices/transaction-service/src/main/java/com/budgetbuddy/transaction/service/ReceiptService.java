@@ -93,7 +93,7 @@ public class ReceiptService {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new TransactionNotFoundException(transactionId));
         if (!transaction.getUserId().equals(userId)) {
-            throw new AccessDeniedException("No tenés permisos sobre esta transacción");
+            throw new AccessDeniedException();
         }
         return transaction;
     }
