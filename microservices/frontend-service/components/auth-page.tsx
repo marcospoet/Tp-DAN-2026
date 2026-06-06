@@ -71,8 +71,12 @@ export function AuthPage() {
       setError("El nombre no puede tener más de 50 caracteres.")
       return
     }
-    if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.")
+    if (mode === "register" && !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
+      setError("La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.")
+      return
+    }
+    if (mode === "login" && password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.")
       return
     }
 
@@ -101,13 +105,23 @@ export function AuthPage() {
         window.location.reload()
       }
     } catch (err: unknown) {
+      const status = (err as { status?: number }).status
       const msg = err instanceof Error ? err.message : "Ocurrió un error."
-      if (msg.includes("already") || msg.includes("registrado") || msg.includes("409")) {
-        setError("Ya existe una cuenta con ese email.")
-      } else if (msg.includes("401") || msg.includes("credentials") || msg.includes("incorrecta")) {
-        setError("Email o contraseña incorrectos.")
+
+      if (mode === "register") {
+        if (status === 409) {
+          setError("Ya existe una cuenta con ese email.")
+        } else if (status === 400) {
+          setError(msg.startsWith("HTTP ") ? "Datos inválidos. Revisá el formulario." : msg)
+        } else {
+          setError("No se pudo crear la cuenta. Intentá de nuevo.")
+        }
       } else {
-        setError(msg)
+        if (status === 401 || status === 403) {
+          setError("Email o contraseña incorrectos.")
+        } else {
+          setError("Ocurrió un error inesperado. Intentá de nuevo.")
+        }
       }
     } finally {
       setLoading(false)
@@ -253,7 +267,7 @@ export function AuthPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 6 caracteres"
+                    placeholder={mode === "register" ? "Min. 8 car., mayúscula y número" : "Tu contraseña"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/50 h-11"

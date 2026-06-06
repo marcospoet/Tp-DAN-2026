@@ -38,16 +38,16 @@ public class ResilienceConfig {
         );
     }
 
-    // auth-service: crítico, solo toca DB → timeout corto, threshold estricto
+    // auth-service: toca DB + RabbitMQ + BCrypt → timeout suficiente para registro
     @Bean
     public Customizer<ReactiveResilience4JCircuitBreakerFactory> authServiceConfig() {
         TimeLimiterConfig timeLimiter = TimeLimiterConfig.custom()
-                .timeoutDuration(Duration.ofSeconds(2))
+                .timeoutDuration(Duration.ofSeconds(8))
                 .build();
 
         CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
                 .failureRateThreshold(40)
-                .slowCallDurationThreshold(Duration.ofSeconds(1))
+                .slowCallDurationThreshold(Duration.ofSeconds(4))
                 .slowCallRateThreshold(60)
                 .slidingWindowSize(10)
                 .minimumNumberOfCalls(5)

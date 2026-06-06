@@ -30,7 +30,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     let message = `HTTP ${res.status}`
     try {
       const body = await res.json()
-      message = body.message ?? body.error ?? message
+      message = body.detail ?? body.message ?? body.error ?? message
     } catch { /* ignore parse error */ }
     const err = new Error(message)
     ;(err as Error & { status: number }).status = res.status

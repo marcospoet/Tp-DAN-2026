@@ -108,11 +108,15 @@ public class AuthServiceImpl implements IAuthService {
         return toProfileResponse(user, p);
     }
 
+    private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$";
+    private static final String PASSWORD_REQUIREMENTS =
+        "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.";
+
     @Override
     @Transactional
     public void changePassword(String email, ChangePasswordRequest request) {
-        if (request.newPassword() == null || request.newPassword().length() < 6) {
-            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
+        if (request.newPassword() == null || !request.newPassword().matches(PASSWORD_REGEX)) {
+            throw new IllegalArgumentException(PASSWORD_REQUIREMENTS);
         }
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UserNotFoundException(email));
