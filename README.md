@@ -667,6 +667,39 @@ docker compose logs postgres --tail=30
 docker compose down -v && docker compose up --build
 ```
 
+**`auth-service` falla con `password authentication failed for user "auth_user"`**
+
+El volumen `postgres_data` ya existía de un run anterior y el `init.sh` solo corre la primera vez. Los roles `auth_user`/`txn_user` nunca fueron creados (o quedaron con otra contraseña).
+
+Opción A — sin perder datos (crear los roles manualmente):
+
+```bash
+docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS txn;"
+docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE ROLE auth_user WITH LOGIN PASSWORD '<AUTH_DB_PASSWORD del .env>';"
+docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE ROLE txn_user WITH LOGIN PASSWORD '<TXN_DB_PASSWORD del .env>';"
+docker exec bb-postgres psql -U postgres -d budgetbuddy -c "
+GRANT USAGE, CREATE ON SCHEMA auth TO auth_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO auth_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO auth_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO auth_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO auth_user;
+GRANT USAGE, CREATE ON SCHEMA txn TO txn_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA txn TO txn_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA txn TO txn_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON TABLES TO txn_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON SEQUENCES TO txn_user;
+"
+docker compose restart auth-service transaction-service
+```
+
+Opción B — resetear todo (borra los datos):
+
+```bash
+docker compose down -v && docker compose up --build
+```
+
+---
+
 **Ver logs de un servicio específico**
 
 ```bash

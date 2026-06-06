@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# Script de inicialización de PostgreSQL
+# Script de inicializacion de PostgreSQL
 # Crea schemas y usuarios separados para cada microservicio.
 # Garantiza el principio de Single Source of Truth:
-#   - auth_user  → solo accede al schema "auth"
-#   - txn_user   → solo accede al schema "txn"
+#   - auth_user  -> solo accede al schema "auth"
+#   - txn_user   -> solo accede al schema "txn"
 #
 # Requiere las siguientes env vars (inyectadas por docker-compose):
 #   AUTH_DB_PASSWORD, TXN_DB_PASSWORD
