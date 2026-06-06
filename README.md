@@ -370,8 +370,13 @@ docker build -f microservices/ai-service/Dockerfile          -t budgetbuddy/ai-s
 # Frontend (contexto: ./microservices/frontend-service)
 docker build -f microservices/frontend-service/Dockerfile    -t budgetbuddy/frontend-service:latest    ./microservices/frontend-service
 
-# Verificar que todas quedaron disponibles
+# Verificar que todas quedaron disponibles (Linux/Mac/WSL)
 docker images | grep budgetbuddy
+```
+
+```powershell
+# Verificar que todas quedaron disponibles (PowerShell)
+docker images | Select-String "budgetbuddy"
 ```
 
 ---
