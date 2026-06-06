@@ -8,26 +8,27 @@ Trabajo Práctico — Desarrollo de Aplicaciones en la Nube — UTN FRSF.
 ## Arquitectura
 
 ```
-                        ┌──────────────────┐
-                        │   Bruno / Client  │
-                        └────────┬─────────┘
-                                 │ :8080
-                        ┌────────▼─────────┐
-                        │   API Gateway    │  ← único punto de entrada público
-                        └────────┬─────────┘
-                                 │ Eureka lb://
-               ┌─────────────────┼─────────────────┐
-               │                 │                 │
-      ┌────────▼───────┐ ┌───────▼──────┐ ┌───────▼──────┐
-      │  auth-service  │ │transaction-  │ │  ai-service  │
-      │    :8081       │ │  service     │ │    :8083     │
-      │                │ │   :8082      │ └──────┬───────┘
-      └────────┬───────┘ └──────┬───────┘        │
-               │                │                │
-         ┌─────▼──────┐  ┌──────▼──────┐  ┌─────▼──────┐
-         │ PostgreSQL  │  │ PostgreSQL  │  │  MongoDB   │
-         │ schema:auth │  │ schema:txn  │  │   ai_db    │
-         └─────────────┘  └─────────────┘  └────────────┘
+          ┌──────────────┐     ┌───────────────────┐
+          │    Browser   │     │   Bruno / Client   │
+          └──────┬───────┘     └─────────┬──────────┘
+                 │ :30300 (K8s)          │ :8080 (Docker)
+                 │ :3000  (Docker)       │ :30080 (K8s)
+      ┌──────────▼──────────┐  ┌────────▼─────────┐
+      │  frontend-service   │  │   API Gateway    │  ← único punto de entrada de la API
+      │   Next.js :3000     │  └────────┬─────────┘
+      └─────────────────────┘           │ Eureka lb://
+                                        │
+               ┌──────────────────────┬─┴──────────────────┐
+               │                      │                     │
+      ┌────────▼───────┐  ┌───────────▼──────┐  ┌──────────▼───┐
+      │  auth-service  │  │transaction-      │  │  ai-service  │
+      │    :8081       │  │  service :8082   │  │    :8083     │
+      └────────┬───────┘  └──────────┬───────┘  └──────┬───────┘
+               │                     │                  │
+         ┌─────▼──────┐  ┌───────────▼─────┐  ┌────────▼───┐
+         │ PostgreSQL  │  │   PostgreSQL    │  │  MongoDB   │
+         │ schema:auth │  │   schema:txn   │  │   ai_db    │
+         └─────────────┘  └─────────────────┘  └────────────┘
                     \              /
                   ┌──▼────────────▼──┐     ┌──────────┐
                   │    RabbitMQ      │     │  MinIO   │
@@ -105,8 +106,9 @@ curl http://localhost:8080/actuator/health
 
 ## Servicios y puertos
 
-| Servicio | Puerto | URL |
+| Servicio | Puerto | URL (Docker Compose) |
 |---|---|---|
+| Frontend | `3000` | http://localhost:3000 |
 | API Gateway | `8080` | http://localhost:8080 |
 | auth-service | `8081` | http://localhost:8081 |
 | transaction-service | `8082` | http://localhost:8082 |
@@ -119,7 +121,7 @@ curl http://localhost:8080/actuator/health
 | PostgreSQL | `5432` | localhost:5432 |
 | MongoDB | `27017` | localhost:27017 |
 
-> En producción, solo el puerto `8080` (API Gateway) debería estar expuesto públicamente.
+> En producción, solo el API Gateway y el Frontend deberían estar expuestos públicamente.
 
 ---
 
@@ -272,7 +274,8 @@ tp-dan-2026/
 │   ├── api-gateway/             ← Spring Cloud Gateway
 │   ├── auth-service/            ← Autenticación y perfiles
 │   ├── transaction-service/     ← Transacciones financieras
-│   └── ai-service/              ← Asistente IA (en desarrollo)
+│   ├── ai-service/              ← Asistente IA (en desarrollo)
+│   └── frontend-service/        ← Next.js (UI web)
 ├── infrastructure/
 │   ├── postgres/                ← init.sh (crea schemas y usuarios)
 │   ├── mongodb/                 ← init-mongo.js
@@ -287,7 +290,7 @@ tp-dan-2026/
 │   ├── 02-configmaps.yaml
 │   ├── infrastructure/          ← postgres, mongodb, rabbitmq, minio
 │   │   └── observability/       ← prometheus, grafana, loki, tempo, promtail
-│   └── microservices/           ← eureka, api-gateway, auth, transaction, ai
+│   └── microservices/           ← eureka, api-gateway, auth, transaction, ai, frontend
 ├── bruno/                       ← Colección de requests para testing manual
 │   ├── environments/
 │   │   └── local.bru
@@ -304,54 +307,86 @@ tp-dan-2026/
 
 Los manifiestos en `k8s/` están listos para cualquier cluster K8s (Minikube, EKS, GKE, AKS).
 
+### Arquitectura de red en K8s
+
+| Servicio | Tipo | Acceso externo |
+|---|---|---|
+| api-gateway | `NodePort 30080` | `<minikube-ip>:30080` |
+| frontend-service | `NodePort 30300` | `<minikube-ip>:30300` |
+| El resto (infraestructura, observabilidad) | `ClusterIP` | port-forward |
+
+---
+
 ### Probar en local con Minikube
 
 **Requisitos:** [Minikube](https://minikube.sigs.k8s.io/docs/start/) y kubectl instalados.
 
-**1. Arrancar Minikube con recursos suficientes**
+---
 
-```bash
+#### Paso 1 — Arrancar Minikube con recursos suficientes
+
+```powershell
 minikube start --memory=6144 --cpus=4
 minikube status
 ```
 
-**2. Apuntar Docker al daemon interno de Minikube**
+---
 
-Este paso es el más importante. Hace que las imágenes que buildees queden dentro del cluster en vez de en tu Docker local.
+#### Paso 2 — Apuntar Docker al daemon interno de Minikube
+
+Este paso hace que las imágenes buildeadas queden dentro del cluster en vez de en tu Docker local.
+
+```powershell
+# PowerShell
+minikube docker-env | Invoke-Expression
+
+# Verificar que apunta al daemon correcto (debe mostrar "minikube")
+docker info | Select-String "Name"
+```
 
 ```bash
 # Linux/Mac/WSL
 eval $(minikube docker-env)
-
-# PowerShell
-minikube docker-env | Invoke-Expression
-
-# Verificar que apunta al daemon correcto
-docker info | grep Name   # debe mostrar "minikube"
+docker info | grep Name
 ```
 
-> Este paso es por sesión de terminal. Si abrís una terminal nueva, repetilo antes de buildear.
+> Este paso es **por sesión de terminal**. Si abrís una terminal nueva, repetilo antes de buildear.
 
-**3. Buildear las imágenes dentro de Minikube**
+---
 
-Desde la raíz del repositorio:
+#### Paso 3 — Buildear todas las imágenes dentro de Minikube
+
+Los microservicios Spring Boot usan la raíz de `microservices/` como contexto de build.  
+El frontend usa su propia carpeta como contexto.
 
 ```bash
-docker build -f microservices/eureka-server/Dockerfile     -t budgetbuddy/eureka-server:latest     ./microservices
-docker build -f microservices/auth-service/Dockerfile      -t budgetbuddy/auth-service:latest      ./microservices
+# Microservicios Spring Boot (contexto: ./microservices)
+docker build -f microservices/eureka-server/Dockerfile       -t budgetbuddy/eureka-server:latest       ./microservices
+docker build -f microservices/api-gateway/Dockerfile         -t budgetbuddy/api-gateway:latest         ./microservices
+docker build -f microservices/auth-service/Dockerfile        -t budgetbuddy/auth-service:latest        ./microservices
 docker build -f microservices/transaction-service/Dockerfile -t budgetbuddy/transaction-service:latest ./microservices
-docker build -f microservices/ai-service/Dockerfile        -t budgetbuddy/ai-service:latest        ./microservices
-docker build -f microservices/api-gateway/Dockerfile       -t budgetbuddy/api-gateway:latest       ./microservices
+docker build -f microservices/ai-service/Dockerfile          -t budgetbuddy/ai-service:latest          ./microservices
 
-# Verificar que quedaron disponibles
+# Frontend (contexto: ./microservices/frontend-service)
+docker build -f microservices/frontend-service/Dockerfile    -t budgetbuddy/frontend-service:latest    ./microservices/frontend-service
+
+# Verificar que todas quedaron disponibles
 docker images | grep budgetbuddy
 ```
 
-**4. Crear y configurar `k8s/01-secrets.yaml`**
+---
 
-El archivo de secrets no está commiteado (está en `.gitignore`). Copiarlo desde el ejemplo y completar los valores:
+#### Paso 4 — Crear y configurar `k8s/01-secrets.yaml`
+
+El archivo de secrets no está commiteado (está en `.gitignore`). Copiarlo desde el ejemplo:
+
+```powershell
+# PowerShell
+Copy-Item k8s\01-secrets.example.yaml k8s\01-secrets.yaml
+```
 
 ```bash
+# Linux/Mac/WSL
 cp k8s/01-secrets.example.yaml k8s/01-secrets.yaml
 ```
 
@@ -367,55 +402,110 @@ Generar un JWT_SECRET seguro de al menos 64 caracteres:
 openssl rand -hex 64
 ```
 
-Pegar el valor generado en `k8s/01-secrets.yaml` reemplazando el campo `JWT_SECRET`.  
-Reemplazar también todos los demás valores `CHANGE_ME` con credenciales reales.
+Editar `k8s/01-secrets.yaml` y reemplazar **todos** los valores `CHANGE_ME` con credenciales reales.  
+Los campos disponibles son:
 
-**5. Aplicar los manifiestos en orden**
+| Campo | Descripción |
+|---|---|
+| `POSTGRES_PASSWORD` | Contraseña del superusuario de PostgreSQL |
+| `AUTH_DB_PASSWORD` | Contraseña del usuario `auth_user` |
+| `TXN_DB_PASSWORD` | Contraseña del usuario `txn_user` |
+| `MONGO_ROOT_PASSWORD` | Contraseña root de MongoDB |
+| `MONGO_APP_PASSWORD` | Contraseña del usuario `ai_user` |
+| `RABBITMQ_PASSWORD` | Contraseña del usuario `admin` de RabbitMQ |
+| `MINIO_SECRET_KEY` | Secret key de MinIO (mínimo 8 caracteres) |
+| `JWT_SECRET` | Secret para firmar JWTs (mínimo 64 caracteres) |
+| `GRAFANA_PASSWORD` | Contraseña del usuario `admin` de Grafana |
+
+---
+
+#### Paso 5 — Aplicar los manifiestos en orden
 
 ```bash
+# 1. Namespace (debe existir antes que cualquier otro recurso)
 kubectl apply -f k8s/00-namespace.yaml
+
+# 2. Secrets y ConfigMaps
 kubectl apply -f k8s/01-secrets.yaml
 kubectl apply -f k8s/02-configmaps.yaml
+
+# 3. Infraestructura (postgres, mongodb, rabbitmq, minio)
 kubectl apply -f k8s/infrastructure/
+
+# 4. Observabilidad (prometheus, grafana, loki, tempo, promtail)
 kubectl apply -f k8s/infrastructure/observability/
 ```
 
-Esperar a que la infraestructura esté lista:
+Esperar a que la infraestructura core esté lista antes de levantar los microservicios:
 
 ```bash
 kubectl wait --for=condition=ready pod -l app=postgres  -n budgetbuddy --timeout=180s
 kubectl wait --for=condition=ready pod -l app=rabbitmq  -n budgetbuddy --timeout=180s
 kubectl wait --for=condition=ready pod -l app=mongodb   -n budgetbuddy --timeout=180s
+kubectl wait --for=condition=ready pod -l app=minio     -n budgetbuddy --timeout=180s
 ```
 
-Luego levantar los microservicios:
-
 ```bash
+# 5. Microservicios (eureka, api-gateway, auth, transaction, ai, frontend)
 kubectl apply -f k8s/microservices/
 ```
 
-**6. Verificar el estado**
+---
+
+#### Paso 6 — Verificar el estado
 
 ```bash
+# Ver todos los pods del namespace
 kubectl get pods -n budgetbuddy
+
+# Ver todos los servicios y sus puertos
+kubectl get svc -n budgetbuddy
 ```
 
-Todos deben llegar a `Running`. Si alguno queda en `CrashLoopBackOff`:
+Todos los pods deben llegar a estado `Running`. Si alguno queda en `CrashLoopBackOff` o `Pending`:
 
 ```bash
-kubectl logs -n budgetbuddy deployment/auth-service
+# Ver logs del contenedor
+kubectl logs -n budgetbuddy deployment/<nombre-del-servicio>
+
+# Ver eventos del pod (útil para errores de scheduling o imagen no encontrada)
+kubectl describe pod -n budgetbuddy -l app=<nombre-del-servicio>
+```
+
+Ejemplo para auth-service:
+
+```bash
+kubectl logs -n budgetbuddy deployment/auth-service --tail=50
 kubectl describe pod -n budgetbuddy -l app=auth-service
 ```
 
-**7. Acceder a los servicios**
+---
 
-Los servicios son `ClusterIP` (internos al cluster). Para acceder desde el navegador usar port-forward:
+#### Paso 7 — Acceder a los servicios
+
+**API Gateway y Frontend (NodePort — acceso directo sin port-forward)**
 
 ```bash
-# API Gateway — mismo puerto que docker-compose
-kubectl port-forward -n budgetbuddy svc/api-gateway 8080:8080
+# Obtener la IP de Minikube
+minikube ip
 
-# Grafana
+# Abrir directamente en el browser
+minikube service api-gateway      -n budgetbuddy
+minikube service frontend-service -n budgetbuddy
+```
+
+Los NodePorts fijos son:
+- API Gateway → `http://<minikube-ip>:30080`
+- Frontend → `http://<minikube-ip>:30300`
+
+Con el API Gateway en `<minikube-ip>:30080`, actualizar el environment de Bruno para que la variable `baseUrl` apunte a esa dirección.
+
+**Herramientas internas (ClusterIP — requieren port-forward)**
+
+Abrir cada uno en una terminal separada (o en background con `&` en bash):
+
+```bash
+# Grafana — dashboards
 kubectl port-forward -n budgetbuddy svc/grafana 3000:3000
 
 # Eureka Dashboard
@@ -423,15 +513,47 @@ kubectl port-forward -n budgetbuddy svc/eureka-server 8761:8761
 
 # RabbitMQ Management
 kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672
+
+# Prometheus
+kubectl port-forward -n budgetbuddy svc/prometheus 9090:9090
+
+# MinIO Console
+kubectl port-forward -n budgetbuddy svc/minio 9001:9001
 ```
 
-Con el port-forward del gateway activo, la colección de Bruno funciona sin cambios (sigue apuntando a `localhost:8080`).
+```powershell
+# PowerShell: ejecutar varios port-forwards en background
+Start-Job { kubectl port-forward -n budgetbuddy svc/grafana 3000:3000 }
+Start-Job { kubectl port-forward -n budgetbuddy svc/eureka-server 8761:8761 }
+Start-Job { kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672 }
+```
 
-**Destruir el entorno**
+---
+
+#### Paso 8 — Destruir el entorno
 
 ```bash
+# Elimina todos los recursos del namespace (pods, services, PVCs, etc.)
 kubectl delete namespace budgetbuddy
 ```
+
+---
+
+### Referencia de puertos en K8s
+
+| Servicio | Puerto interno | Acceso desde el host |
+|---|---|---|
+| API Gateway | `8080` | `<minikube-ip>:30080` (NodePort) |
+| Frontend | `3000` | `<minikube-ip>:30300` (NodePort) |
+| Eureka Dashboard | `8761` | port-forward → `localhost:8761` |
+| RabbitMQ Management | `15672` | port-forward → `localhost:15672` |
+| Grafana | `3000` | port-forward → `localhost:3000` |
+| Prometheus | `9090` | port-forward → `localhost:9090` |
+| MinIO Console | `9001` | port-forward → `localhost:9001` |
+| Loki | `3100` | solo interno al cluster |
+| Tempo | `3200` | solo interno al cluster |
+| PostgreSQL | `5432` | solo interno al cluster |
+| MongoDB | `27017` | solo interno al cluster |
 
 ---
 
@@ -440,18 +562,20 @@ kubectl delete namespace budgetbuddy
 **1. Buildear y publicar las imágenes en un registry**
 
 ```bash
-# Ejemplo con Docker Hub (reemplazar "tu-org" con tu usuario/organización)
-docker build -f microservices/auth-service/Dockerfile      -t tu-org/budgetbuddy-auth:1.0.0      ./microservices
-docker build -f microservices/transaction-service/Dockerfile -t tu-org/budgetbuddy-transaction:1.0.0 ./microservices
-docker build -f microservices/api-gateway/Dockerfile       -t tu-org/budgetbuddy-gateway:1.0.0   ./microservices
-docker build -f microservices/eureka-server/Dockerfile     -t tu-org/budgetbuddy-eureka:1.0.0    ./microservices
-docker build -f microservices/ai-service/Dockerfile        -t tu-org/budgetbuddy-ai:1.0.0        ./microservices
+# Reemplazar "tu-org" con tu usuario/organización de Docker Hub
+docker build -f microservices/eureka-server/Dockerfile       -t tu-org/budgetbuddy-eureka:1.0.0       ./microservices
+docker build -f microservices/api-gateway/Dockerfile         -t tu-org/budgetbuddy-gateway:1.0.0      ./microservices
+docker build -f microservices/auth-service/Dockerfile        -t tu-org/budgetbuddy-auth:1.0.0         ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t tu-org/budgetbuddy-transaction:1.0.0  ./microservices
+docker build -f microservices/ai-service/Dockerfile          -t tu-org/budgetbuddy-ai:1.0.0           ./microservices
+docker build -f microservices/frontend-service/Dockerfile    -t tu-org/budgetbuddy-frontend:1.0.0     ./microservices/frontend-service
 
+docker push tu-org/budgetbuddy-eureka:1.0.0
+docker push tu-org/budgetbuddy-gateway:1.0.0
 docker push tu-org/budgetbuddy-auth:1.0.0
 docker push tu-org/budgetbuddy-transaction:1.0.0
-docker push tu-org/budgetbuddy-gateway:1.0.0
-docker push tu-org/budgetbuddy-eureka:1.0.0
 docker push tu-org/budgetbuddy-ai:1.0.0
+docker push tu-org/budgetbuddy-frontend:1.0.0
 ```
 
 **2. Actualizar los nombres de imagen en los yamls**
@@ -459,28 +583,23 @@ docker push tu-org/budgetbuddy-ai:1.0.0
 En cada archivo de `k8s/microservices/` cambiar el campo `image:` para que apunte al registry:
 
 ```yaml
-# Antes (local)
+# Antes (local Minikube)
 image: budgetbuddy/auth-service:latest
 
 # Después (producción)
 image: tu-org/budgetbuddy-auth:1.0.0
 ```
 
-Los archivos a editar son los 5 de `k8s/microservices/`.
+Los archivos a editar son los 6 de `k8s/microservices/`.
 
-**3. Secretos de producción**
+**3. Aplicar los manifiestos**
 
-Reemplazar **todos** los valores en `k8s/01-secrets.yaml` con credenciales reales antes de aplicar.  
-El archivo tiene comentarios indicando cada uno.
+El orden es el mismo que en local (Pasos 5 en adelante).  
+El cluster baja las imágenes del registry automáticamente (`imagePullPolicy: IfNotPresent`).
 
-**4. Aplicar los manifiestos**
+**4. Exponer el API Gateway**
 
-El orden es el mismo que en local (pasos 5 en adelante del apartado anterior).  
-El cluster K8s se encarga de bajar las imágenes del registry automáticamente (`imagePullPolicy: IfNotPresent`).
-
-**5. Exponer el API Gateway**
-
-En producción reemplazar el `Service` de tipo `NodePort` del api-gateway por un `LoadBalancer` o agregar un `Ingress`:
+En producción, reemplazar el `NodePort` del api-gateway y del frontend por `LoadBalancer` o agregar un `Ingress`:
 
 ```yaml
 # k8s/microservices/api-gateway.yaml — cambiar el tipo del Service
