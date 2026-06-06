@@ -72,7 +72,7 @@ Generar el JWT secret con:
 
 ```powershell
 # PowerShell
-[System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(64)).Replace('-','').ToLower()
+$bytes = New-Object byte[] 64; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); [System.BitConverter]::ToString($bytes).Replace('-','').ToLower()
 ```
 
 ```bash
@@ -399,7 +399,7 @@ Generar un JWT_SECRET seguro de al menos 64 caracteres:
 
 ```powershell
 # PowerShell (Windows)
-[System.BitConverter]::ToString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(64)).Replace('-','').ToLower()
+$bytes = New-Object byte[] 64; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); [System.BitConverter]::ToString($bytes).Replace('-','').ToLower()
 ```
 
 ```bash

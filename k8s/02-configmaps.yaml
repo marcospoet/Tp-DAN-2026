@@ -69,15 +69,20 @@ metadata:
 data:
   init-mongo.js: |
     const appUser = process.env.MONGO_APP_USER || 'ai_user';
-    const appPassword = process.env.MONGO_APP_PASSWORD || 'ai_pass';
+    const appPassword = process.env.MONGO_APP_PASSWORD || 'admin';
 
     db = db.getSiblingDB('ai_db');
 
-    db.createUser({
-      user: appUser,
-      pwd: appPassword,
-      roles: [{ role: 'readWrite', db: 'ai_db' }]
-    });
+    if (!db.getUser(appUser)) {
+      db.createUser({
+        user: appUser,
+        pwd: appPassword,
+        roles: [
+          { role: 'readWrite', db: 'ai_db' },
+          { role: 'dbAdmin',   db: 'ai_db' }
+        ]
+      });
+    }
 
     db.createCollection('chat_sessions');
     db.createCollection('chat_messages');
