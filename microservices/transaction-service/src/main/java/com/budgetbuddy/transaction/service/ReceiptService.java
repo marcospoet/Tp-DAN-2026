@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 import java.util.UUID;
 
@@ -64,6 +65,25 @@ public class ReceiptService {
 
         log.info("Receipt subido: transactionId={}, path={}", transactionId, objectName);
         return toResponse(receipt, minioService.getPresignedUrl(objectName));
+    }
+
+    public record ReceiptDownload(InputStream stream, String contentType) {}
+
+    @Transactional(readOnly = true)
+    public ReceiptDownload download(UUID userId, UUID transactionId) {
+        getOwnedTransaction(userId, transactionId);
+        Receipt receipt = receiptRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("La transacción no tiene comprobante"));
+        String path = receipt.getFilePath();
+        String ext = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1).toLowerCase() : "";
+        String contentType = switch (ext) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png"         -> "image/png";
+            case "webp"        -> "image/webp";
+            case "pdf"         -> "application/pdf";
+            default            -> "application/octet-stream";
+        };
+        return new ReceiptDownload(minioService.download(path), contentType);
     }
 
     @Transactional(readOnly = true)

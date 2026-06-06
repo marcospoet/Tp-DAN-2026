@@ -66,6 +66,17 @@ public class MinioService {
         }
     }
 
+    public InputStream download(String objectName) {
+        try {
+            return minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectName)
+                    .build());
+        } catch (Exception e) {
+            throw new MinioException("Error al descargar archivo de MinIO: " + e.getMessage(), e);
+        }
+    }
+
     public String getPresignedUrl(String objectName) {
         try {
             return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()

@@ -633,17 +633,19 @@ export function TransactionList({
                   <AnimatePresence>
                     {isExpanded && (tx.observation || tx.receiptUrl) && (
                       <motion.div
-                        className="ml-14 mr-2 mt-1 mb-1 px-4 py-2.5 rounded-xl bg-secondary/50 border border-border"
+                        className="mt-1 mb-1 rounded-xl bg-secondary/50 border border-border overflow-hidden"
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
                       >
-                        {tx.receiptUrl && <ReceiptImage path={tx.receiptUrl} />}
+                        {tx.receiptUrl && <ReceiptImage txId={tx.id} />}
                         {tx.observation && (
-                          <p className="text-xs text-muted-foreground flex items-start gap-2">
-                            <StickyNote className="w-3 h-3 mt-0.5 shrink-0 text-accent" />
-                            {tx.observation}
-                          </p>
+                          <div className={`px-4 py-2.5${tx.receiptUrl ? " border-t border-border" : ""}`}>
+                            <p className="text-xs text-muted-foreground flex items-start gap-2">
+                              <StickyNote className="w-3 h-3 mt-0.5 shrink-0 text-accent" />
+                              {tx.observation}
+                            </p>
+                          </div>
                         )}
                       </motion.div>
                     )}

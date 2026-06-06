@@ -31,6 +31,8 @@ export interface Transaction {
   exchangeRateType?: ExchangeRateType | null
   /** URL del comprobante adjunto */
   receiptUrl?: string
+  /** Cuándo fue agregada al sistema (ISO string) */
+  createdAt?: string
   /** Se repite automáticamente */
   isRecurring?: boolean
   /** Frecuencia de repetición del fijo */
@@ -86,6 +88,7 @@ function mapTransaction(row: any): Transaction {
     txRate: row.txRate != null ? Number(row.txRate) : undefined,
     exchangeRateType: row.exchangeRateType ?? null,
     receiptUrl: row.receiptUrl ?? undefined,
+    createdAt: row.createdAt ?? undefined,
     isRecurring: row.isRecurring ?? row.recurring ?? false,
     recurringFrequency: (row.recurringFrequency ?? undefined) as RecurringFrequency | undefined,
     account: row.account ?? undefined,
@@ -120,7 +123,8 @@ interface AppState {
   navDirection: "forward" | "back"
   // Transactions
   transactions: Transaction[]
-  addTransaction: (t: Omit<Transaction, "id">, onError?: (msg: string) => void) => void
+  addTransaction: (t: Omit<Transaction, "id">, onError?: (msg: string) => void, onCreated?: (id: string) => void) => void
+  patchTransactionReceiptUrl: (id: string, receiptUrl: string) => void
   deleteTransaction: (id: string, onError?: (msg: string) => void) => void
   updateTransaction: (id: string, updates: Partial<Omit<Transaction, "id">>, onError?: (msg: string) => void) => void
   // UI
@@ -333,10 +337,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const [recent, olderCheck] = await Promise.all([
       apiRequest<{ content: unknown[]; totalElements: number }>(
-        `/api/transactions?from=${cutoffStr}&size=200&sort=date,desc`
+        `/api/transactions?from=${cutoffStr}&size=200&sort=createdAt,desc`
       ),
       apiRequest<{ totalElements: number }>(
-        `/api/transactions?to=${cutoffStr}&size=1&sort=date,desc`
+        `/api/transactions?to=${cutoffStr}&size=1&sort=createdAt,desc`
       ),
     ])
 
@@ -353,7 +357,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsLoadingHistory(true)
     try {
       const data = await apiRequest<{ content: unknown[] }>(
-        `/api/transactions?to=${cutoff}&size=1000&sort=date,desc`
+        `/api/transactions?to=${cutoff}&size=1000&sort=createdAt,desc`
       )
       if (data.content && data.content.length > 0) {
         setTransactions(prev => {
@@ -410,11 +414,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   // ── Transaction actions ──────────────────────────────────────────────────────
-  const addTransaction = (t: Omit<Transaction, "id">, onError?: (msg: string) => void) => {
+  const addTransaction = (t: Omit<Transaction, "id">, onError?: (msg: string) => void, onCreated?: (id: string) => void) => {
     if (!user) return
 
     const tempId = `temp-${Date.now()}`
-    setTransactions(prev => [{ ...t, id: tempId }, ...prev])
+    setTransactions(prev => [{ ...t, id: tempId, createdAt: new Date().toISOString() }, ...prev])
 
     const body: Record<string, unknown> = {
       description: sanitizeField(t.description, 35) ?? "Transacción",
@@ -446,12 +450,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify(body),
     })
       .then(data => {
-        setTransactions(prev => prev.map(tx => tx.id === tempId ? mapTransaction(data) : tx))
+        const mapped = mapTransaction(data)
+        setTransactions(prev => prev.map(tx => tx.id === tempId ? mapped : tx))
+        onCreated?.(mapped.id)
       })
       .catch(() => {
         setTransactions(prev => prev.filter(tx => tx.id !== tempId))
         onError?.("No se pudo guardar la transacción. Verificá tu conexión.")
       })
+  }
+
+  const patchTransactionReceiptUrl = (id: string, receiptUrl: string) => {
+    setTransactions(prev => prev.map(tx => tx.id === id ? { ...tx, receiptUrl } : tx))
   }
 
   const deleteTransaction = (id: string, onError?: (msg: string) => void) => {
@@ -550,6 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     navDirection,
     transactions,
     addTransaction,
+    patchTransactionReceiptUrl,
     deleteTransaction,
     updateTransaction,
     isProcessing,

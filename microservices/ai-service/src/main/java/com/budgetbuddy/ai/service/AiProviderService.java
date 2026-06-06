@@ -346,19 +346,68 @@ public class AiProviderService {
         }
     }
 
-    // ── Whisper (audio transcription) ─────────────────────────────────────────
+    // ── Audio transcription ───────────────────────────────────────────────────
 
     /**
-     * Transcribes audio using OpenAI Whisper.
-     * Returns null if the configured provider is not OpenAI (no Whisper equivalent for Claude/Gemini).
+     * Transcribes audio using the provider's best available method.
+     * OpenAI → Whisper, Gemini → multimodal inline_data, Claude → null (unsupported).
      */
     public String transcribeAudio(String audioBase64, String mimeType, String providerOverride, String apiKeyOverride) {
         String p = resolveProvider(providerOverride);
-        if (!"openai".equals(p)) {
-            return null;
-        }
         String k = resolveKey(p, apiKeyOverride);
-        return transcribeWithWhisper(audioBase64, mimeType, k);
+        return switch (p) {
+            case "openai" -> transcribeWithWhisper(audioBase64, mimeType, k);
+            case "gemini" -> transcribeWithGemini(audioBase64, mimeType, k);
+            default -> null; // Claude — no tiene API de transcripción de audio
+        };
+    }
+
+    private String transcribeWithGemini(String audioBase64, String mimeType, String apiKey) {
+        try {
+            String safeMime = (mimeType != null && !mimeType.isBlank()) ? mimeType : "audio/webm";
+
+            ObjectNode body = mapper.createObjectNode();
+
+            ArrayNode contents = mapper.createArrayNode();
+            ObjectNode content = mapper.createObjectNode();
+            content.put("role", "user");
+            ArrayNode parts = mapper.createArrayNode();
+
+            ObjectNode audioPart = mapper.createObjectNode();
+            ObjectNode inlineData = mapper.createObjectNode();
+            inlineData.put("mime_type", safeMime);
+            inlineData.put("data", audioBase64);
+            audioPart.set("inline_data", inlineData);
+            parts.add(audioPart);
+
+            ObjectNode textPart = mapper.createObjectNode();
+            textPart.put("text", "Transcribí exactamente lo que se dice en este audio en español. Devolvé únicamente el texto transcripto, sin explicaciones ni formato adicional.");
+            parts.add(textPart);
+
+            content.set("parts", parts);
+            contents.add(content);
+            body.set("contents", contents);
+
+            ObjectNode genConfig = mapper.createObjectNode();
+            genConfig.put("maxOutputTokens", 200);
+            genConfig.put("temperature", 0);
+            body.set("generationConfig", genConfig);
+
+            String response = webClient.post()
+                    .uri(GEMINI_URL + "?key=" + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body.toString())
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JsonNode json = mapper.readTree(response);
+            return json.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Error Gemini transcripción " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new RuntimeException("Error transcribiendo con Gemini: " + e.getMessage());
+        }
     }
 
     private String transcribeWithWhisper(String audioBase64, String mimeType, String apiKey) {

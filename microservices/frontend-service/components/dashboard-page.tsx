@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useApp, type TimeFilter, type ExchangeRateType, type RecurringFrequency } from "@/lib/app-context"
 import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
+import { getToken } from "@/lib/api-client"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
 import { useChatHandler } from "@/hooks/use-chat-handler"
 import type { DateRange } from "react-day-picker"
@@ -75,6 +76,7 @@ export function DashboardPage() {
     user,
     transactions,
     addTransaction,
+    patchTransactionReceiptUrl,
     deleteTransaction,
     updateTransaction,
     setView,
@@ -484,7 +486,10 @@ export function DashboardPage() {
         setProcessingLabel("Transcribiendo audio...")
         const transcription = await transcribeAudioAttachment(aiProvider, apiKey, audioAtt)
         if (!transcription) {
-          setAiError("No se pudo transcribir el audio. Verificá tu API key de OpenAI en Ajustes.")
+          const errMsg = (aiProvider as string) === "claude"
+            ? "Claude no soporta transcripción de audio. Cambiá a OpenAI o Gemini en Ajustes."
+            : "No se pudo transcribir el audio. Verificá tu API key en Ajustes."
+          setAiError(errMsg)
           setTimeout(() => setAiError(null), 5000)
           return
         }
@@ -522,8 +527,8 @@ export function DashboardPage() {
         return
       }
 
-      // Receipt upload deferred to Phase E (MinIO migration)
-      const receiptUrl: string | undefined = undefined
+      // Image attachment to upload as receipt after transaction is created
+      const imageFile = capturedAttachments.find(a => a.type === "image")?.file
 
       let usdAutoDetected = false
       for (const result of valid) {
@@ -575,12 +580,25 @@ export function DashboardPage() {
           exchangeRateType: rateTypeForResult,
           observation: obs ?? result.observation,
           isRecurring: result.suggestRecurring === true,
-          receiptUrl: valid.length === 1 ? receiptUrl : undefined,
           account: detectedAccount,
         }, (msg) => {
           setAiError(msg)
           setTimeout(() => setAiError(null), 6000)
-        })
+        }, valid.length === 1 && imageFile ? (txId) => {
+          void (async () => {
+            try {
+              const formData = new FormData()
+              formData.append("file", imageFile)
+              const token = getToken()
+              const res = await fetch(`/api/transactions/${txId}/receipt`, {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                body: formData,
+              })
+              if (res.ok) patchTransactionReceiptUrl(txId, "receipt")
+            } catch { /* silent — transaction created, receipt upload failed */ }
+          })()
+        } : undefined)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al procesar."

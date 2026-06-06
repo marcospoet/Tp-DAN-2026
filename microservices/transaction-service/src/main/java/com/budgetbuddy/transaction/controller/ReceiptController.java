@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,17 @@ import java.util.UUID;
 public class ReceiptController {
 
     private final ReceiptService receiptService;
+
+    @Operation(summary = "Descargar comprobante (stream directo — no expone URL de MinIO al browser)")
+    @GetMapping
+    public ResponseEntity<InputStreamResource> download(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id) {
+        ReceiptService.ReceiptDownload dl = receiptService.download(userId, id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(dl.contentType()))
+                .body(new InputStreamResource(dl.stream()));
+    }
 
     @Operation(summary = "Subir o reemplazar comprobante (JPEG, PNG, WEBP, PDF — máx. 10 MB)")
     @ApiResponses({
