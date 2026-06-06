@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 /**
- * AI Service — Procesamiento AI y Analytics de BudgetBuddy.
+ * AI Service — Procesamiento AI y Analytics de Pesito.
  *
  * Responsabilidades:
  *  - Recibir texto/imagen/audio y llamar al proveedor AI configurado

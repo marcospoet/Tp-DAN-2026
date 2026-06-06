@@ -13,7 +13,7 @@
     </parent>
 
     <artifactId>ai-service</artifactId>
-    <name>BudgetBuddy :: AI Service</name>
+    <name>Pesito :: AI Service</name>
     <description>Procesamiento AI (Claude/OpenAI/Gemini), chat financiero y analytics</description>
 
     <dependencies>
