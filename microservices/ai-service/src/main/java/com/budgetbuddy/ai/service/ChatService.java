@@ -27,6 +27,10 @@ public class ChatService {
     }
 
     public ChatResponse chat(ChatRequest req) {
+        return chat(req, null, null);
+    }
+
+    public ChatResponse chat(ChatRequest req, String providerOverride, String apiKeyOverride) {
         String userId = req.getUserId() != null ? req.getUserId() : "anonymous";
 
         // Load or create session
@@ -45,8 +49,8 @@ public class ChatService {
         // Build system prompt with financial context
         String systemPrompt = prompts.buildChatSystemPrompt(req.getFinancialContext());
 
-        // Call AI
-        String reply = aiProvider.callChat(systemPrompt, history);
+        // Call AI with optional provider/key overrides
+        String reply = aiProvider.callChat(systemPrompt, history, providerOverride, apiKeyOverride);
 
         // Persist the new exchange
         session.addMessage(new ChatMessage("user", req.getMessage()));

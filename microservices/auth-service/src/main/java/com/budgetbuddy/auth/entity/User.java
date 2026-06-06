@@ -25,9 +25,6 @@ public class User {
     @Builder.Default
     private String provider = "local";
 
-    @Column(name = "provider_id")
-    private String providerId;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

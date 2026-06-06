@@ -5,6 +5,8 @@
  * Base URL: NEXT_PUBLIC_API_URL (api-gateway) → routed to ai-service
  */
 
+import { getToken } from "@/lib/api-client"
+
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "") + "/api/ai"
 
 // ── Types (unchanged — shared with rest of the app) ───────────────────────────
@@ -194,11 +196,19 @@ function translateError(msg: string): string {
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
-async function postToAiService<T>(path: string, body: object): Promise<T> {
+async function postToAiService<T>(path: string, body: object, provider?: string, apiKey?: string): Promise<T> {
+  const token = getToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      ...body,
+      ...(provider ? { provider } : {}),
+      ...(apiKey ? { apiKey } : {}),
+    }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -214,8 +224,8 @@ async function postToAiService<T>(path: string, body: object): Promise<T> {
  * Calls POST /api/ai/parse — backend holds the API key.
  */
 export async function callAI(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   input: string,
   attachments?: AIAttachment[]
 ): Promise<ParsedTransaction | ParsedTransaction[]> {
@@ -230,7 +240,7 @@ export async function callAI(
       imageBase64: imageAttachment?.base64 ?? null,
       imageMimeType: imageAttachment?.mimeType ?? "image/jpeg",
       todayDate: today,
-    })
+    }, provider as string, apiKey as string)
     return extractAndValidate(data.rawResponse)
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido."
@@ -243,8 +253,8 @@ export async function callAI(
  * Calls POST /api/ai/chat — session history stored in MongoDB on the backend.
  */
 export async function callAIChat(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   context: string,
   history: ChatTurn[],
   _audioAttachment?: AIAttachment
@@ -259,7 +269,7 @@ export async function callAIChat(
       message: safeHistory[safeHistory.length - 1]?.text ?? "",
       financialContext: context,
       history: safeHistory,
-    })
+    }, provider as string, apiKey as string)
     return data.reply
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido."
@@ -271,8 +281,8 @@ export async function callAIChat(
  * Detect update intent: which transaction to modify and what fields.
  */
 export async function callAIUpdateDetect(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   message: string
 ): Promise<ParsedUpdate> {
   const today = new Date().toISOString().split("T")[0]
@@ -282,7 +292,7 @@ export async function callAIUpdateDetect(
       message: safeMsg,
       intentType: "update",
       todayDate: today,
-    })
+    }, provider as string, apiKey as string)
     const raw = data.rawResponse
     const matchBase = parseAIMatch(raw)
     if (!matchBase) return { match: null, updates: {} }
@@ -315,8 +325,8 @@ export async function callAIUpdateDetect(
  * Detect delete intent: which transaction to remove.
  */
 export async function callAIDeleteDetect(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   message: string
 ): Promise<ParsedDelete> {
   const today = new Date().toISOString().split("T")[0]
@@ -326,7 +336,7 @@ export async function callAIDeleteDetect(
       message: safeMsg,
       intentType: "delete",
       todayDate: today,
-    })
+    }, provider as string, apiKey as string)
     const match = parseAIMatch(data.rawResponse)
     return { match }
   } catch {
@@ -338,8 +348,8 @@ export async function callAIDeleteDetect(
  * Detect recurring intent: which transaction to mark/unmark as recurring.
  */
 export async function callAIRecurringDetect(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   message: string
 ): Promise<ParsedRecurring> {
   const today = new Date().toISOString().split("T")[0]
@@ -349,7 +359,7 @@ export async function callAIRecurringDetect(
       message: safeMsg,
       intentType: "recurring",
       todayDate: today,
-    })
+    }, provider as string, apiKey as string)
     const raw = data.rawResponse
     const match = parseAIMatch(raw)
     if (!match) return { match: null, recurring: false }
@@ -366,8 +376,8 @@ export async function callAIRecurringDetect(
  * CSV column mapping — identify columns from headers + sample rows.
  */
 export async function callAICSVMapping(
-  _provider: unknown,
-  _apiKey: unknown,
+  provider: unknown,
+  apiKey: unknown,
   headers: string[],
   sampleRows: string[][]
 ): Promise<CSVMapping | null> {
@@ -375,7 +385,7 @@ export async function callAICSVMapping(
     const data = await postToAiService<{ rawResponse: string }>("/csv-mapping", {
       headers,
       sampleRows,
-    })
+    }, provider as string, apiKey as string)
     const m = data.rawResponse.match(/\{[\s\S]*\}/)
     if (!m) return null
     const p = JSON.parse(m[0])

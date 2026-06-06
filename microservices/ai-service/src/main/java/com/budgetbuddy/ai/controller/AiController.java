@@ -62,7 +62,9 @@ public class AiController {
                     PromptService.SYSTEM_PROMPT,
                     userMessage,
                     req.getImageBase64(),
-                    req.getImageMimeType()
+                    req.getImageMimeType(),
+                    req.getProvider(),
+                    req.getApiKey()
             );
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
@@ -96,7 +98,7 @@ public class AiController {
             String safeMsg = prompts.sanitizeUserInput(req.getMessage());
             req.setMessage(safeMsg);
 
-            ChatResponse response = chatService.chat(req);
+            ChatResponse response = chatService.chat(req, req.getProvider(), req.getApiKey());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -129,7 +131,7 @@ public class AiController {
                 default -> PromptService.DELETE_DETECT_PROMPT;
             };
 
-            String raw = aiProvider.callSingleTurn(systemPrompt, userMessage);
+            String raw = aiProvider.callSingleTurn(systemPrompt, userMessage, null, null, req.getProvider(), req.getApiKey());
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
