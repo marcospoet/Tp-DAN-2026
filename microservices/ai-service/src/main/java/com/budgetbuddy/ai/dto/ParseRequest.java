@@ -6,6 +6,8 @@ public class ParseRequest {
     private String imageBase64;
     private String imageMimeType = "image/jpeg";
     private String todayDate;
+    private String provider;
+    private String apiKey;
 
     public String getInput() { return input; }
     public void setInput(String input) { this.input = input; }
@@ -18,4 +20,10 @@ public class ParseRequest {
 
     public String getTodayDate() { return todayDate; }
     public void setTodayDate(String todayDate) { this.todayDate = todayDate; }
+
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
+
+    public String getApiKey() { return apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 }

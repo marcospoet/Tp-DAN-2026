@@ -12,5 +12,8 @@ public record ProfileResponse(
     String exchangeRateMode,
     BigDecimal usdRate,
     String aiProvider,
+    String apiKeyClaude,
+    String apiKeyOpenai,
+    String apiKeyGemini,
     String defaultAccount
 ) {}

@@ -101,6 +101,9 @@ interface ProfileResponse {
   exchangeRateMode?: string
   usdRate?: number
   aiProvider?: string
+  apiKeyClaude?: string
+  apiKeyOpenai?: string
+  apiKeyGemini?: string
   defaultAccount?: string
 }
 
@@ -243,7 +246,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [apiKeyClaude, setApiKeyClaude] = useState("")
   const [apiKeyOpenAI, setApiKeyOpenAI] = useState("")
   const [apiKeyGemini, setApiKeyGemini] = useState("")
-  const apiKey = "backend-managed"
+  const apiKey = aiProvider === "openai" ? apiKeyOpenAI
+               : aiProvider === "gemini" ? apiKeyGemini
+               : apiKeyClaude
 
   const [userName, setUserName] = useState("Usuario")
   const [defaultAccount, setDefaultAccount] = useState("Efectivo")
@@ -313,6 +318,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExchangeRateMode((profile.exchangeRateMode as ExchangeRateMode) ?? "api")
     setUsdRate(profile.usdRate ?? 1350)
     setAiProvider((profile.aiProvider as AIProvider) ?? "claude")
+    setApiKeyClaude(profile.apiKeyClaude ?? "")
+    setApiKeyOpenAI(profile.apiKeyOpenai ?? "")
+    setApiKeyGemini(profile.apiKeyGemini ?? "")
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

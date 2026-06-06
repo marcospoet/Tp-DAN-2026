@@ -35,22 +35,48 @@ public class AiProviderService {
         this.mapper = new ObjectMapper();
     }
 
+    // ── Provider / key resolution ─────────────────────────────────────────────
+
+    private String resolveProvider(String override) {
+        return (override != null && !override.isBlank()) ? override.toLowerCase() : props.getProvider().toLowerCase();
+    }
+
+    private String resolveKey(String provider, String override) {
+        if (override != null && !override.isBlank()) return override;
+        return switch (provider) {
+            case "openai" -> props.getOpenaiApiKey();
+            case "gemini" -> props.getGeminiApiKey();
+            default -> props.getClaudeApiKey();
+        };
+    }
+
     /**
      * Single-turn call for transaction parsing and intent detection.
      * Returns the raw AI text response; parsing is done by the caller.
      */
     public String callSingleTurn(String systemPrompt, String userMessage) {
-        return callSingleTurn(systemPrompt, userMessage, null, null);
+        return callSingleTurn(systemPrompt, userMessage, null, null, null, null);
     }
 
     /**
      * Single-turn call with optional image attachment.
      */
     public String callSingleTurn(String systemPrompt, String userMessage, String imageBase64, String imageMimeType) {
-        return switch (props.getProvider().toLowerCase()) {
-            case "openai" -> callOpenAI(systemPrompt, userMessage, imageBase64, imageMimeType);
-            case "gemini" -> callGemini(systemPrompt, userMessage, imageBase64, imageMimeType);
-            default -> callClaude(systemPrompt, userMessage, imageBase64, imageMimeType);
+        return callSingleTurn(systemPrompt, userMessage, imageBase64, imageMimeType, null, null);
+    }
+
+    /**
+     * Single-turn call with optional image and provider/key overrides.
+     * If providerOverride or apiKeyOverride are blank, falls back to env-var config.
+     */
+    public String callSingleTurn(String systemPrompt, String userMessage, String imageBase64, String imageMimeType,
+                                 String providerOverride, String apiKeyOverride) {
+        String p = resolveProvider(providerOverride);
+        String k = resolveKey(p, apiKeyOverride);
+        return switch (p) {
+            case "openai" -> callOpenAI(systemPrompt, userMessage, imageBase64, imageMimeType, k);
+            case "gemini" -> callGemini(systemPrompt, userMessage, imageBase64, imageMimeType, k);
+            default -> callClaude(systemPrompt, userMessage, imageBase64, imageMimeType, k);
         };
     }
 
@@ -58,16 +84,26 @@ public class AiProviderService {
      * Multi-turn chat call. history = all turns including the current user message.
      */
     public String callChat(String systemPrompt, List<ChatTurnDto> history) {
-        return switch (props.getProvider().toLowerCase()) {
-            case "openai" -> callOpenAIChat(systemPrompt, history);
-            case "gemini" -> callGeminiChat(systemPrompt, history);
-            default -> callClaudeChat(systemPrompt, history);
+        return callChat(systemPrompt, history, null, null);
+    }
+
+    /**
+     * Multi-turn chat call with optional provider/key overrides.
+     */
+    public String callChat(String systemPrompt, List<ChatTurnDto> history,
+                           String providerOverride, String apiKeyOverride) {
+        String p = resolveProvider(providerOverride);
+        String k = resolveKey(p, apiKeyOverride);
+        return switch (p) {
+            case "openai" -> callOpenAIChat(systemPrompt, history, k);
+            case "gemini" -> callGeminiChat(systemPrompt, history, k);
+            default -> callClaudeChat(systemPrompt, history, k);
         };
     }
 
     // ── Claude ────────────────────────────────────────────────────────────────
 
-    private String callClaude(String systemPrompt, String userMessage, String imageBase64, String mimeType) {
+    private String callClaude(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", "claude-3-5-haiku-20241022");
@@ -102,7 +138,7 @@ public class AiProviderService {
 
             String response = webClient.post()
                     .uri(CLAUDE_URL)
-                    .header("x-api-key", props.getClaudeApiKey())
+                    .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
@@ -119,7 +155,7 @@ public class AiProviderService {
         }
     }
 
-    private String callClaudeChat(String systemPrompt, List<ChatTurnDto> history) {
+    private String callClaudeChat(String systemPrompt, List<ChatTurnDto> history, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", "claude-3-5-haiku-20241022");
@@ -137,7 +173,7 @@ public class AiProviderService {
 
             String response = webClient.post()
                     .uri(CLAUDE_URL)
-                    .header("x-api-key", props.getClaudeApiKey())
+                    .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
@@ -156,7 +192,7 @@ public class AiProviderService {
 
     // ── OpenAI ────────────────────────────────────────────────────────────────
 
-    private String callOpenAI(String systemPrompt, String userMessage, String imageBase64, String mimeType) {
+    private String callOpenAI(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", "gpt-4o-mini");
@@ -194,7 +230,7 @@ public class AiProviderService {
 
             String response = webClient.post()
                     .uri(OPENAI_URL)
-                    .header("Authorization", "Bearer " + props.getOpenaiApiKey())
+                    .header("Authorization", "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
@@ -210,7 +246,7 @@ public class AiProviderService {
         }
     }
 
-    private String callOpenAIChat(String systemPrompt, List<ChatTurnDto> history) {
+    private String callOpenAIChat(String systemPrompt, List<ChatTurnDto> history, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", "gpt-4o-mini");
@@ -233,7 +269,7 @@ public class AiProviderService {
 
             String response = webClient.post()
                     .uri(OPENAI_URL)
-                    .header("Authorization", "Bearer " + props.getOpenaiApiKey())
+                    .header("Authorization", "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
@@ -251,7 +287,7 @@ public class AiProviderService {
 
     // ── Gemini ────────────────────────────────────────────────────────────────
 
-    private String callGemini(String systemPrompt, String userMessage, String imageBase64, String mimeType) {
+    private String callGemini(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
 
@@ -290,7 +326,7 @@ public class AiProviderService {
             body.set("generationConfig", genConfig);
 
             String response = webClient.post()
-                    .uri(GEMINI_URL + "?key=" + props.getGeminiApiKey())
+                    .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
@@ -306,7 +342,7 @@ public class AiProviderService {
         }
     }
 
-    private String callGeminiChat(String systemPrompt, List<ChatTurnDto> history) {
+    private String callGeminiChat(String systemPrompt, List<ChatTurnDto> history, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
 
@@ -338,7 +374,7 @@ public class AiProviderService {
             body.set("generationConfig", genConfig);
 
             String response = webClient.post()
-                    .uri(GEMINI_URL + "?key=" + props.getGeminiApiKey())
+                    .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()

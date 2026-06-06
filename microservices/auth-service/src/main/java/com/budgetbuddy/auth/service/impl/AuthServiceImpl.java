@@ -142,7 +142,9 @@ public class AuthServiceImpl implements IAuthService {
             user.getId(), user.getEmail(),
             p.getUserName(), p.getMonthlyBudget(),
             p.getProfileMode(), p.getExchangeRateMode(),
-            p.getUsdRate(), p.getAiProvider(), p.getDefaultAccount()
+            p.getUsdRate(), p.getAiProvider(),
+            p.getApiKeyClaude(), p.getApiKeyOpenai(), p.getApiKeyGemini(),
+            p.getDefaultAccount()
         );
     }
 }
