@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useApp, type TimeFilter, type ExchangeRateType, type RecurringFrequency } from "@/lib/app-context"
-import { callAI, type AIAttachment } from "@/lib/ai"
+import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
 import { useChatHandler } from "@/hooks/use-chat-handler"
 import type { DateRange } from "react-day-picker"
@@ -476,8 +476,26 @@ export function DashboardPage() {
         })),
       )
 
+      // Transcribe audio first — pass the text to the normal parse pipeline.
+      // Audio in the magic bar should never open the chatbot.
+      const audioAtt = aiAttachments.find(a => a.type === "audio")
+      let finalTextInput = textInput
+      if (audioAtt) {
+        setProcessingLabel("Transcribiendo audio...")
+        const transcription = await transcribeAudioAttachment(aiProvider, apiKey, audioAtt)
+        if (!transcription) {
+          setAiError("No se pudo transcribir el audio. Verificá tu API key de OpenAI en Ajustes.")
+          setTimeout(() => setAiError(null), 5000)
+          return
+        }
+        finalTextInput = transcription
+        setProcessingLabel("Analizando con IA...")
+      }
+
+      const nonAudioAttachments = aiAttachments.filter(a => a.type !== "audio")
+
       const aiResult = await Promise.race([
-        callAI(aiProvider, apiKey, textInput, aiAttachments.length > 0 ? aiAttachments : undefined),
+        callAI(aiProvider, apiKey, finalTextInput, nonAudioAttachments.length > 0 ? nonAudioAttachments : undefined),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("La IA tardó demasiado. Revisá tu conexión e intentá de nuevo.")), 30_000)
         ),
@@ -486,23 +504,21 @@ export function DashboardPage() {
       const valid = results.filter(r => r.type !== "unknown")
 
       if (valid.length === 0) {
-        const audioAtt = aiAttachments.find(a => a.type === "audio")
-        const hasText = textInput.trim().length > 0
-        if (!hasText && !audioAtt) {
+        if (audioAtt) {
+          // Audio was transcribed but AI couldn't detect a transaction
+          setAiError("No reconocí una transacción en el audio. Intentá ser más específico.")
+          setTimeout(() => setAiError(null), 5000)
+          return
+        }
+        if (!finalTextInput.trim()) {
           // Only image/file — AI couldn't extract a transaction
           setAiError("No reconocí una transacción en la imagen. Describí el gasto con palabras.")
           setTimeout(() => setAiError(null), 5000)
           return
         }
+        // Text that AI couldn't parse as transaction — redirect to chat for clarification
         setChatOpen(true)
-        // Small delay to ensure chat panel is mounted before sending
-        setTimeout(() => {
-          if (audioAtt) {
-            submitChatMessage("", audioAtt, true)
-          } else {
-            submitChatMessage(textInput, undefined, true)
-          }
-        }, 100)
+        setTimeout(() => { submitChatMessage(finalTextInput, undefined, true) }, 100)
         return
       }
 
@@ -543,7 +559,7 @@ export function DashboardPage() {
         // Account: AI-detected > keyword match > default
         const detectedAccount =
           result.account ||
-          detectAccountFromText(textInput) ||
+          detectAccountFromText(finalTextInput) ||
           defaultAccount
 
         addTransaction({

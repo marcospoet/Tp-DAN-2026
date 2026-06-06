@@ -403,15 +403,24 @@ export async function callAICSVMapping(
 }
 
 /**
- * Audio transcription — still done client-side via OpenAI Whisper when available.
- * If no backend transcription is configured, returns null (falls back to text input).
+ * Audio transcription via OpenAI Whisper (server-side).
+ * Returns the transcribed text, or null if the provider doesn't support
+ * transcription (Claude / Gemini) or an error occurs.
  */
 export async function transcribeAudioAttachment(
-  _provider: unknown,
-  _apiKey: unknown,
-  _attachment: AIAttachment
+  provider: unknown,
+  apiKey: unknown,
+  attachment: AIAttachment
 ): Promise<string | null> {
-  // Audio transcription via backend is planned for a future phase.
-  // For now return null so the caller falls back to showing a text input.
-  return null
+  try {
+    const data = await postToAiService<{ transcription: string }>(
+      "/transcribe",
+      { audioBase64: attachment.base64, mimeType: attachment.mimeType },
+      provider as string,
+      apiKey as string
+    )
+    return data.transcription?.trim() || null
+  } catch {
+    return null
+  }
 }

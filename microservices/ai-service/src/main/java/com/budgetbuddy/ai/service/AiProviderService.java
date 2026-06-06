@@ -6,11 +6,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -339,6 +343,60 @@ public class AiProviderService {
             throw new RuntimeException("Error Gemini " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
         } catch (Exception e) {
             throw new RuntimeException("Error llamando a Gemini: " + e.getMessage());
+        }
+    }
+
+    // ── Whisper (audio transcription) ─────────────────────────────────────────
+
+    /**
+     * Transcribes audio using OpenAI Whisper.
+     * Returns null if the configured provider is not OpenAI (no Whisper equivalent for Claude/Gemini).
+     */
+    public String transcribeAudio(String audioBase64, String mimeType, String providerOverride, String apiKeyOverride) {
+        String p = resolveProvider(providerOverride);
+        if (!"openai".equals(p)) {
+            return null;
+        }
+        String k = resolveKey(p, apiKeyOverride);
+        return transcribeWithWhisper(audioBase64, mimeType, k);
+    }
+
+    private String transcribeWithWhisper(String audioBase64, String mimeType, String apiKey) {
+        try {
+            byte[] audioBytes = Base64.getDecoder().decode(audioBase64);
+            String safeMime = (mimeType != null && !mimeType.isBlank()) ? mimeType : "audio/webm";
+
+            // Derive a sensible filename extension from the MIME type
+            String ext = safeMime.contains("webm") ? "webm"
+                    : safeMime.contains("mp4") ? "mp4"
+                    : safeMime.contains("mpeg") ? "mp3"
+                    : safeMime.contains("ogg") ? "ogg"
+                    : safeMime.contains("wav") ? "wav"
+                    : "webm";
+            String filename = "audio." + ext;
+            final String finalMime = safeMime;
+
+            MultipartBodyBuilder builder = new MultipartBodyBuilder();
+            builder.part("model", "whisper-1");
+            builder.part("language", "es");
+            builder.part("file", new ByteArrayResource(audioBytes) {
+                @Override public String getFilename() { return filename; }
+            }, MediaType.parseMediaType(finalMime));
+
+            String response = webClient.post()
+                    .uri("https://api.openai.com/v1/audio/transcriptions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .body(BodyInserters.fromMultipartData(builder.build()))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JsonNode json = mapper.readTree(response);
+            return json.path("text").asText();
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Error Whisper " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new RuntimeException("Error transcribiendo audio: " + e.getMessage());
         }
     }
 

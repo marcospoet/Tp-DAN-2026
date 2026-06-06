@@ -486,8 +486,8 @@ export function TransactionList({
                         )}
                       </div>
 
-                      {/* Desktop action buttons — visible on hover */}
-                      <div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
+                      {/* Desktop action buttons — always visible */}
+                      <div className="hidden md:flex items-center gap-0.5 shrink-0 ml-1">
                         <button
                           type="button"
                           className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors cursor-pointer"

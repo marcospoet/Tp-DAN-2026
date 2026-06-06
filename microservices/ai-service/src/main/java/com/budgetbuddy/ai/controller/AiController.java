@@ -5,6 +5,7 @@ import com.budgetbuddy.ai.dto.ChatResponse;
 import com.budgetbuddy.ai.dto.DetectIntentRequest;
 import com.budgetbuddy.ai.dto.ParseRequest;
 import com.budgetbuddy.ai.dto.RawAiResponse;
+import com.budgetbuddy.ai.dto.TranscribeRequest;
 import com.budgetbuddy.ai.service.AiProviderService;
 import com.budgetbuddy.ai.service.ChatService;
 import com.budgetbuddy.ai.service.PromptService;
@@ -160,6 +161,32 @@ public class AiController {
             log.error("Error in /api/ai/csv-mapping: {}", e.getMessage());
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Error al analizar el CSV. Intentá de nuevo."));
+        }
+    }
+
+    /**
+     * Audio transcription via OpenAI Whisper.
+     * Returns null for providers that don't support transcription (Claude, Gemini).
+     *
+     * POST /api/ai/transcribe
+     * Body: { audioBase64, mimeType?, provider?, apiKey? }
+     */
+    @PostMapping("/transcribe")
+    public ResponseEntity<?> transcribe(
+            @RequestBody TranscribeRequest req,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        try {
+            if (req.getAudioBase64() == null || req.getAudioBase64().isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No se recibió audio."));
+            }
+            String transcription = aiProvider.transcribeAudio(
+                    req.getAudioBase64(), req.getMimeType(),
+                    req.getProvider(), req.getApiKey());
+            return ResponseEntity.ok(Map.of("transcription", transcription != null ? transcription : ""));
+        } catch (Exception e) {
+            log.error("Error in /api/ai/transcribe: {}", e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Error al transcribir el audio. Intentá de nuevo."));
         }
     }
 
