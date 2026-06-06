@@ -2,6 +2,7 @@ package com.budgetbuddy.transaction.service;
 
 import com.budgetbuddy.transaction.dto.ExchangeRateResponse;
 import com.budgetbuddy.transaction.exception.ExchangeRateException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,9 @@ public class ExchangeRateService {
     /**
      * DTO interno para deserializar la respuesta de DolarAPI.
      * Los nombres coinciden con los campos JSON de la API.
+     * ignoreUnknown = true porque la API también devuelve "moneda" y "nombre".
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     private record DolarApiRate(
             String casa,
             BigDecimal compra,
@@ -91,8 +94,10 @@ public class ExchangeRateService {
     }
 
     private ExchangeRateResponse toResponse(DolarApiRate rate) {
+        // DolarAPI usa "bolsa" para el dólar MEP; normalizamos al nombre que usa el frontend.
+        String type = "bolsa".equalsIgnoreCase(rate.casa()) ? "mep" : rate.casa().toLowerCase();
         return new ExchangeRateResponse(
-                rate.casa(),
+                type,
                 rate.compra(),
                 rate.venta(),
                 rate.fechaActualizacion()

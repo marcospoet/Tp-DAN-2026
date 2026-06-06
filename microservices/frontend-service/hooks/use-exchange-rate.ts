@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { getToken } from "@/lib/api-client"
 
 
 export interface DolarRate {
@@ -67,8 +68,10 @@ export function useExchangeRate({
     setError(null)
 
     try {
+      const token = getToken()
       const res = await fetch("/api/rates", {
         cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
 
       if (!res.ok) throw new Error(`Error ${res.status}`)
