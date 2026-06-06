@@ -69,7 +69,7 @@ interface ChatHandlerParams {
 
 const INITIAL_BOT_MESSAGE: ChatMessage = {
   role: "bot",
-  text: "¡Hola! Soy BudgetBuddy AI 🤖\n\n📝 Registrar  →  \"gasté 3500 en almuerzo\" · \"cobré 200 USD\"\n🔍 Consultar  →  \"¿cuánto gasté esta semana?\" · \"¿me alcanza el presupuesto?\"\n✏️ Modificar  →  \"al taxi de ayer, cambiá el monto a 2800\"\n🗑️ Eliminar   →  \"borrá el super de ayer\"\n🔁 Recurrente →  \"marcá el alquiler como recurrente\"\n📊 Analizar   →  \"¿en qué categoría gasto más?\"\n\n¿En qué te ayudo?",
+  text: "¡Hola! Soy Pesito, tu asistente financiero 🪙\n\n📝 Registrar  →  \"gasté 3500 en almuerzo\" · \"cobré 200 USD\"\n🔍 Consultar  →  \"¿cuánto gasté esta semana?\" · \"¿me alcanza el presupuesto?\"\n✏️ Modificar  →  \"al taxi de ayer, cambiá el monto a 2800\"\n🗑️ Eliminar   →  \"borrá el super de ayer\"\n🔁 Recurrente →  \"marcá el alquiler como recurrente\"\n📊 Analizar   →  \"¿en qué categoría gasto más?\"\n\n¿En qué te ayudo?",
 }
 
 // #7 — Rolling compression constants

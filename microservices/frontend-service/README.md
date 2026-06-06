@@ -1,108 +1,82 @@
-# BudgetBuddy
+# frontend-service — Pesito
 
-Rastreador de gastos con IA para la economía argentina. Registrá movimientos por texto, foto o audio y dejá que la IA los interprete.
+Interfaz web de Pesito, el rastreador de gastos con IA para la economía argentina.
+Registrá movimientos por texto, foto, audio o PDF y dejá que la IA los interprete.
 
-**Demo:** [finanzas-budget-buddy.vercel.app](https://finanzas-budget-buddy.vercel.app)
+> **Base:** Este frontend fue construido sobre el proyecto [BudgetBuddy](https://github.com/MarcosPiv/BudgetBuddy)
+> de [Marcos Pividori](https://github.com/MarcosPiv), adaptado y extendido para correr como microservicio
+> dentro del stack del TP DAN 2026. Se eliminó la dependencia de Supabase (auth, DB y storage),
+> se reemplazó el despliegue de Vercel por Docker/Kubernetes, y se agregaron funcionalidades nuevas
+> (soporte PDF, comprobantes en MinIO, proxy pattern, JWT auth contra `auth-service`, etc.).
+
+---
+
+## Diferencias respecto al proyecto original
+
+| Aspecto | BudgetBuddy original | Pesito (este proyecto) |
+|---|---|---|
+| Auth | Supabase Auth (OAuth + email) | JWT contra `auth-service` vía API Gateway |
+| Base de datos | Supabase PostgreSQL + RLS | `transaction-service` (PostgreSQL) vía API Gateway |
+| Storage de imágenes | Supabase Storage | MinIO vía `transaction-service` |
+| Llamadas de IA | Directo al provider desde el browser | `ai-service` vía API Gateway (keys server-side) |
+| Deploy | Vercel | Docker multi-stage + Kubernetes |
+| Variables de entorno | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `BACKEND_URL` (server-side only) |
+| Offline queue | localStorage + sync con Supabase | localStorage + sync via REST al `api-gateway` |
+| PDF de facturas | No soportado | Soportado — se envía a `ai-service` para parseo |
 
 ---
 
 ## Funcionalidades
 
-### BudgetBuddy AI (asistente de chat)
-- **Registrar movimientos** — "gasté 3500 en almuerzo" o "cobré 200 USD"; la IA extrae monto, categoría, ícono y moneda automáticamente
-- **Detección de cuenta** — "pagué con MercadoPago" o "con Galicia" asocia el movimiento al medio de pago correcto; nunca lo usa como categoría
-- **Modificar desde el chat** — "al taxi de ayer, cambiá el monto a 2800" o "al gym, agregale la nota 'pago mensual'"
-- **Eliminar desde el chat** — "borrá el super de ayer"; la IA identifica la transacción y la elimina
-- **Marcar como recurrente** — "marcá el alquiler como recurrente" o "el gym ya no es fijo"
-- **Consultar y analizar** — "¿cuánto gasté esta semana?", "¿me alcanza el presupuesto?", "¿en qué categoría gasto más?"
-- **Contexto financiero completo** — el asistente accede a los últimos 60 movimientos, resumen anual/mensual, proyección a fin de mes, cotización USD activa y montos en USD cuando corresponde
-- **Soporte de voz** — grabación de audio en el chat con transcripción automática y UX estilo WhatsApp (timer, deslizar para cancelar)
-- **Corrección de tipo de cambio** — "pero fue en dólar blue" actualiza el tipo de cambio del último movimiento registrado
-
 ### Magic Bar
-- **Multimodal** — texto libre, foto de ticket (galería o cámara en vivo), nota adjunta, fecha personalizada
+- **Multimodal** — texto libre, foto de ticket (galería o cámara en vivo), audio, fecha personalizada, PDF de factura
 - **Multi-transacción** — "almorcé 1200 y tomé café 400" genera dos movimientos en un solo envío
-- **Detección de cuotas** — "notebook en 6 cuotas de 50000" genera 6 transacciones con notas "Cuota 1/6", "Cuota 2/6", etc.
-- **Tipo de cambio inline** — chips con cotizaciones en vivo (Blue, Oficial, Tarjeta, MEP); "Manual" expande un input para tasa personalizada
-- **Grabación de audio** — mismo patrón WhatsApp/Telegram; autoenvío al soltar, cancelar deslizando
+- **Detección de cuotas** — "notebook en 6 cuotas de 50000" genera 6 transacciones con notas "Cuota 1/6", etc.
+- **Tipo de cambio inline** — chips con cotizaciones en vivo (Blue, Oficial, Tarjeta, MEP); modo Manual con input personalizado
+- **Grabación de audio** — patrón WhatsApp/Telegram; autoenvío al soltar, cancelar deslizando
+- **PDF de facturas** — adjuntá un PDF; la IA extrae monto total, proveedor y categoría automáticamente
+
+### Pesito IA (asistente de chat)
+- **Registrar movimientos** desde el chat — "gasté 3500 en almuerzo"
+- **Modificar y eliminar** — "al taxi de ayer cambiá el monto a 2800"; "borrá el super de ayer"
+- **Marcar recurrentes** — "marcá el alquiler como recurrente"
+- **Consultar y analizar** — "¿cuánto gasté esta semana?", "¿en qué categoría gasto más?"
+- **Contexto financiero completo** — últimos 60 movimientos, resumen anual/mensual, proyección, cotización USD activa
+- **Soporte de voz** — grabación en el chat con transcripción automática
 
 ### Gestión de transacciones
 - **Swipe en mobile** — deslizá derecha para editar, izquierda para eliminar
-- **Long-press** — hold 500ms para mostrar acciones de editar/eliminar
-- **Búsqueda** — filtrá por descripción, categoría u observación
-- **Filtros temporales** — semana, mes, año, rango personalizado con calendario y presets rápidos (Hoy, Ayer, 7 días, 30 días, Este mes, Mes anterior)
+- **Long-press** — hold 500ms para mostrar acciones
+- **Búsqueda y filtros temporales** — semana, mes, año, rango personalizado con calendario y presets rápidos
 - **Gastos fijos** — marcá movimientos como recurrentes; sección dedicada en Analítica
+- **Comprobantes** — subí foto del ticket; se guarda en MinIO y se muestra en la tarjeta de transacción
 
 ### Cuentas y medios de pago
-- **"¿Dónde está mi dinero?"** — panel de distribución de balance por cuenta/billetera; respeta el filtro temporal activo (semana, mes, año o rango personalizado)
-- **Catálogo de 50+ medios de pago argentinos** — Mercado Pago, Ualá, BBVA, Galicia, Santander, Brubank, Efectivo y más; organizados en Billetera Virtual, Banco Digital, Banco Privado, Banco Público, Cripto/Inversión y Efectivo
-- **Drill-down por cuenta** — tocá una cuenta para ver el listado de movimientos de ese período con balance, ingresos y gastos detallados
-- **Detección automática** — la IA detecta el medio de pago desde el texto y lo asigna al campo `account` sin confundirlo con la categoría del gasto
-- **Cuenta predeterminada** — configurable en Ajustes; se usa cuando no se detecta ningún medio de pago explícito
+- **"¿Dónde está mi dinero?"** — panel de distribución de balance por cuenta/billetera
+- **Catálogo de 50+ medios de pago argentinos** — Mercado Pago, Ualá, BBVA, Galicia, Santander, Brubank, Efectivo y más
+- **Drill-down por cuenta** — tocá una cuenta para ver movimientos del período con balance detallado
+- **Detección automática** — la IA detecta el medio de pago desde el texto
 
 ### Importar CSV
 - Importación masiva de transacciones desde archivos CSV
 - Mapeo de columnas interactivo con previsualización antes de confirmar
 
 ### Multi-moneda ARS / USD
-- Cotización en vivo vía [DolarAPI](https://dolarapi.com): Blue, Oficial, Tarjeta, MEP
+- Cotización en vivo vía DolarAPI (Blue, Oficial, Tarjeta, MEP) — a través del API Gateway
 - `txRate` se bloquea al momento de cargar cada movimiento — el historial no cambia si el dólar se mueve
-- Modo manual: podés ingresar una tasa personalizada por movimiento
-- Actualización automática cada 5 minutos; toggle para modo manual global en Ajustes
+- Actualización automática cada 5 minutos
 
 ### Analítica y exportación
 - **Gráfico de tendencia** — LineChart anual con ingresos vs gastos por mes
 - **Donut de categorías** — PieChart con breakdown por categoría
-- **Exportar CSV** — BOM-prefixed UTF-8, compatible con Excel; columnas: Fecha, Tipo, Descripción, Categoría, Monto, Moneda, Nota
-- **Exportar PDF** — genera un documento HTML completo con tarjetas de resumen, tabla por categoría y lista de movimientos; sin dependencias externas
-- **Selector de rango** — presets (mes actual, mes anterior, año) + rango personalizado con calendario
+- **Heatmap de gastos** — mapa de calor por día del mes
+- **Exportar CSV y PDF** — BOM-prefixed UTF-8, compatible con Excel
+- **Resumen compartible** — imagen/tarjeta de resumen exportable
 
-### Rendimiento — carga en dos fases
-- **Phase 1 (login):** solo se cargan los últimos 6 meses de transacciones — el dashboard aparece de inmediato sin importar cuántos años de datos haya
-- **Phase 2 (background):** el historial completo se carga automáticamente al abrir Analítica o al usar el filtro "Año" / rango personalizado en el Dashboard
-- Índice `(user_id, date DESC)` en Supabase garantiza queries O(log n) en ambas fases
-
-### Offline y sincronización
-- Operaciones en cola local (`localStorage`) cuando no hay conexión
-- Update optimista inmediato — el dashboard no espera a Supabase
-- Al recuperar señal, la cola se procesa en orden y resuelve IDs temporales
-- Indicador de estado en el header: badge ámbar "N en cola" o spinner "Sincronizando..."
-
-### PWA y notificaciones
-- Instalable en Android (prompt nativo) e iOS (instrucción Safari)
+### PWA
+- Instalable en Android e iOS
 - Service worker con cache de app shell + assets estáticos
-- Notificaciones push: recordatorio diario, alerta al 90% del presupuesto, aviso de fijos el 1° de cada mes, resumen semanal los lunes
-- Soporte completo para notch / Dynamic Island: `env(safe-area-inset-top/bottom)` en todos los headers y Toaster
-
-### Autenticación
-- **Email/contraseña** — registro y login tradicional
-- **OAuth** — login con Google y GitHub; el nombre y foto de perfil se toman automáticamente del proveedor
-- **Recuperación de contraseña** — flujo por email con redirect a `/reset-password`
-
-### UX / UI
-- **Modo oscuro / claro** — paleta "Sage Morning" en modo claro; transición suave de 0.45s
-- **Gestos nativos Android** — botón/gesto back navega entre vistas; doble-back en la raíz muestra toast "Deslizá de nuevo para salir" y cierra la PWA
-- **Avatar de perfil** — foto de Google/GitHub visible en el header del dashboard y en la página de perfil
-- **Picker de categoría rápido** — tap en el ícono de una transacción despliega chips de categoría sin abrir el diálogo completo; hover muestra lápiz como hint
-- **Empty state contextual** — usuario nuevo ve "¡Empezá a registrar!"; período sin movimientos muestra el filtro activo ("Sin movimientos esta semana")
-- **Tres proveedores de IA** — Claude (Anthropic), GPT-4o (OpenAI), Gemini (Google); switcheable en Ajustes
-- **Validación de API keys** — formato validado antes de cada llamada con mensajes de error amigables
-- **Timeout de IA** — 30 segundos máximo por request; libera la barra con mensaje claro si la API no responde
-
----
-
-## Modo sin conexión — caso de uso
-
-> **Escenario:** estás en una feria con mala señal y querés registrar varios gastos.
-
-1. El celular pierde conexión (o está en modo avión).
-2. Registrás normalmente: "Compré verduras $4.500", "Café $1.200", "Transporte $800".
-3. Las tres transacciones aparecen en el dashboard de inmediato — sin spinner, sin error.
-4. El header muestra **"3 en cola"** en badge ámbar.
-5. Al salir y recuperar señal, BudgetBuddy sincroniza en orden con Supabase.
-6. El badge desaparece y los movimientos quedan persistidos con sus IDs reales.
-
-Lo mismo aplica para editar o eliminar sin conexión.
+- Soporte para notch / Dynamic Island
 
 ---
 
@@ -111,13 +85,36 @@ Lo mismo aplica para editar o eliminar sin conexión.
 | Capa | Tecnología |
 |------|-----------|
 | Framework | Next.js 16 (App Router) |
-| Auth + DB | Supabase (PostgreSQL + RLS) |
 | Estilos | Tailwind CSS v4 + shadcn/ui |
 | Animaciones | Framer Motion |
 | Gráficos | Recharts |
 | Temas | next-themes |
-| IA | Anthropic / OpenAI / Google APIs |
-| Deploy | Vercel |
+| Notificaciones | Sonner |
+| Deploy | Docker multi-stage + Kubernetes |
+
+---
+
+## Arquitectura — Proxy Pattern
+
+Todas las llamadas del browser van a rutas relativas `/api/*`, que son interceptadas por el Route Handler `app/api/[...proxy]/route.ts` y reenviadas server-side al API Gateway.
+
+```
+Browser → /api/auth/login
+  → Next.js proxy (server-side)
+  → http://api-gateway:8080/api/auth/login
+
+Browser → /api/ai/parse
+  → Next.js proxy
+  → http://api-gateway:8080/api/ai/parse
+  → ai-service (Claude / OpenAI / Gemini)
+
+Browser → /api/transactions
+  → Next.js proxy
+  → http://api-gateway:8080/api/transactions
+  → transaction-service (PostgreSQL)
+```
+
+**Beneficios:** Las API keys y URLs de backend nunca llegan al browser. CORS no es un problema. La CSP del browser solo necesita `connect-src 'self'`.
 
 ---
 
@@ -125,72 +122,156 @@ Lo mismo aplica para editar o eliminar sin conexión.
 
 ```
 app/
-  page.tsx                  # SPA router — renderiza la vista activa
-  layout.tsx                # ThemeProvider, PWA meta, Toaster
+  api/
+    [...proxy]/route.ts     # Proxy universal — reenvía todas las requests al API Gateway
+    health/route.ts         # GET /api/health → { status: "UP", service: "frontend-service" }
   reset-password/page.tsx   # Ruta standalone para recuperación de contraseña
+  globals.css               # Variables CSS y estilos globales (oklch, dark mode)
+  layout.tsx                # ThemeProvider, PWA meta, Toaster
+  page.tsx                  # SPA router — renderiza la vista activa según currentView
+
 components/
-  dashboard-page.tsx        # Orquestador del dashboard (estado + handlers)
+  dashboard-page.tsx        # Orquestador del dashboard (estado + handlers principales)
+  landing-page.tsx          # Landing + instalación PWA
+  auth-page.tsx             # Login, registro, recuperación de contraseña
+  settings-page.tsx         # Tema, IA, tipo de cambio, cuenta predeterminada
+  analytics-page.tsx        # Gráficos de tendencia y categoría; gastos fijos; exportar
+  profile-page.tsx          # Cambio de nombre y contraseña
+  accounts-page.tsx         # Vista detallada de cuentas y balances
+  onboarding-wizard.tsx     # Wizard de configuración inicial
+  biometric-lock.tsx        # Bloqueo biométrico / PIN
+  pwa-register.tsx          # Registro del service worker
+
   dashboard/
     shared.tsx              # Constantes (iconMap, VALID_CATEGORIES, PAYMENT_ACCOUNTS),
-                            # tipos (ChatMessage, Attachment, PaymentAccount) y utilidades
+                            # tipos (Transaction, ChatMessage, Attachment, PaymentAccount)
+                            # y utilidades (fileToBase64)
+    magic-bar.tsx           # Barra multimodal (texto, foto, audio, PDF)
+    chat-panel.tsx          # Sidebar del asistente Pesito IA
     filter-bar.tsx          # Chips de filtro temporal + calendario inline
     summary-cards.tsx       # Tarjetas de resumen (presupuesto / ingresos+gastos)
     category-chart.tsx      # Breakdown de gastos por categoría
     transaction-list.tsx    # Lista swipeable con búsqueda y paginación
-    swipe-card.tsx          # Wrapper de gesto de swipe (editar / eliminar)
-    magic-bar.tsx           # Barra multimodal de entrada (texto, foto, audio)
-    chat-panel.tsx          # Sidebar del asistente IA con historial de mensajes
+    swipe-card.tsx          # Wrapper de gesto swipe (editar / eliminar)
     edit-dialog.tsx         # Formulario de edición de transacción
     delete-dialog.tsx       # Confirmación de eliminación
     camera-modal.tsx        # Cámara en vivo para capturar tickets
     accounts-modal.tsx      # "¿Dónde está mi dinero?" — balance por cuenta + drill-down
     import-csv-modal.tsx    # Importación masiva desde CSV
-    onboarding-overlay.tsx  # Overlay de bienvenida
-    receipt-image.tsx       # Imagen de comprobante desde Supabase Storage
+    onboarding-overlay.tsx  # Overlay de bienvenida para usuario nuevo
+    receipt-image.tsx       # Imagen de comprobante servida desde MinIO
     exchange-type-badge.tsx # Badge de tipo de cambio (Blue / Oficial / Tarjeta / MEP)
     skeleton.tsx            # Skeletons de carga
-  settings-page.tsx         # Tema, notificaciones, IA, tipo de cambio, modo perfil
-  analytics-page.tsx        # Gráficos de tendencia y categoría; gastos fijos; exportar
-  auth-page.tsx             # Login, registro, recuperación de contraseña
-  landing-page.tsx          # Landing + instalación PWA
-  profile-page.tsx          # Cambio de nombre y contraseña
+
+  analytics/
+    expense-heatmap.tsx     # Heatmap de gastos por día del mes
+    share-summary.tsx       # Tarjeta de resumen exportable/compartible
+
+  ui/                       # Componentes shadcn/ui (Radix UI + Tailwind)
+
 hooks/
-  use-exchange-rate.ts      # Cotizaciones en vivo desde DolarAPI
+  use-exchange-rate.ts      # Cotizaciones en vivo desde DolarAPI (vía proxy)
   use-notifications.ts      # Permisos y envío de notificaciones push
   use-chat-handler.ts       # Lógica del chat: intents de delete/update/recurring/register
+
 lib/
-  app-context.tsx           # Estado global (React Context + Supabase + offline queue)
+  app-context.tsx           # Estado global (React Context + offline queue + JWT)
   ai.ts                     # callAI / callAIChat / callAIUpdateDetect /
-                            # callAIDeleteDetect / callAIRecurringDetect — Claude, OpenAI, Gemini
-  supabase.ts               # Cliente Supabase
+                            # callAIDeleteDetect / callAIRecurringDetect
+                            # → todos van al proxy → ai-service
+  api-client.ts             # Helpers REST autenticados (Authorization: Bearer <jwt>)
+  utils.ts                  # Utilidades generales (cn, formatters)
+
 public/
   sw.js                     # Service worker (cache + push notifications)
-  manifest.json             # Web App Manifest
+  manifest.json             # Web App Manifest (nombre, íconos, colores)
+
+styles/                     # Estilos adicionales
 ```
+
+---
+
+## Modelo de datos principal
+
+```typescript
+interface Transaction {
+  id: string
+  description: string
+  amount: number              // valor nominal (ARS o USD)
+  type: "income" | "expense"
+  icon: string                // nombre de ícono lucide-react
+  category: string
+  date: Date
+  observation?: string
+  currency: "ARS" | "USD"
+  amountUsd?: number
+  txRate?: number             // tasa ARS bloqueada al momento de carga — inmutable
+  exchangeRateType?: "BLUE" | "TARJETA" | "OFICIAL" | "MEP" | "MANUAL" | null
+  isRecurring?: boolean
+  account?: string            // banco / billetera / medio de pago
+  receiptUrl?: string         // URL presignada de comprobante en MinIO
+}
+```
+
+---
+
+## Variables de entorno
+
+| Variable | Dónde | Propósito |
+|---|---|---|
+| `BACKEND_URL` | Server-side (Docker env / `.env.local`) | URL base del API Gateway |
+
+No se usan variables `NEXT_PUBLIC_*`. La URL del backend nunca se expone al browser.
 
 ---
 
 ## Setup local
 
 ```bash
-git clone https://github.com/MarcosPiv/BudgetBuddy.git
-cd BudgetBuddy
+# Desde la raíz del monorepo
+cd microservices/frontend-service
 npm install
 ```
 
 Crear `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+BACKEND_URL=http://localhost:8080
 ```
 
 ```bash
-npm run dev   # http://localhost:3000
+npm run dev   # http://localhost:3001
 ```
+
+> **Requiere** que el API Gateway (`api-gateway`) esté corriendo en `localhost:8080`
+> con `auth-service`, `transaction-service` y `ai-service` disponibles.
+> Ver el `docker-compose.yml` raíz para levantar el stack completo.
 
 ---
 
-## Desarrollado por
+## Docker
 
-[Marcos Pividori](https://github.com/MarcosPiv)
+```bash
+# Build desde la raíz del monorepo
+docker build -t pesito/frontend-service ./microservices/frontend-service
+
+# Run standalone
+docker run -p 3001:3001 \
+  -e BACKEND_URL=http://api-gateway:8080 \
+  pesito/frontend-service
+```
+
+El `Dockerfile` usa un build multi-stage (`node:20-alpine`) con `output: "standalone"` de Next.js.
+
+---
+
+## Health check
+
+```
+GET /api/health
+→ { "status": "UP", "service": "frontend-service" }
+```
+
+Usado por el healthcheck de Docker y las liveness probes de Kubernetes.
+
+---

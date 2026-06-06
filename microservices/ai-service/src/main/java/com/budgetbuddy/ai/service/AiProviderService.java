@@ -14,6 +14,15 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 
@@ -75,12 +84,22 @@ public class AiProviderService {
      */
     public String callSingleTurn(String systemPrompt, String userMessage, String imageBase64, String imageMimeType,
                                  String providerOverride, String apiKeyOverride) {
+        return callSingleTurn(systemPrompt, userMessage, imageBase64, imageMimeType, null, null, providerOverride, apiKeyOverride);
+    }
+
+    /**
+     * Single-turn call with optional image, optional file (PDF) and provider/key overrides.
+     * Claude supports PDF via "type":"document"; Gemini via inline_data; OpenAI skips the file.
+     */
+    public String callSingleTurn(String systemPrompt, String userMessage, String imageBase64, String imageMimeType,
+                                 String fileBase64, String fileMimeType,
+                                 String providerOverride, String apiKeyOverride) {
         String p = resolveProvider(providerOverride);
         String k = resolveKey(p, apiKeyOverride);
         return switch (p) {
-            case "openai" -> callOpenAI(systemPrompt, userMessage, imageBase64, imageMimeType, k);
-            case "gemini" -> callGemini(systemPrompt, userMessage, imageBase64, imageMimeType, k);
-            default -> callClaude(systemPrompt, userMessage, imageBase64, imageMimeType, k);
+            case "openai" -> callOpenAI(systemPrompt, userMessage, imageBase64, imageMimeType, fileBase64, fileMimeType, k);
+            case "gemini" -> callGemini(systemPrompt, userMessage, imageBase64, imageMimeType, fileBase64, fileMimeType, k);
+            default -> callClaude(systemPrompt, userMessage, imageBase64, imageMimeType, fileBase64, fileMimeType, k);
         };
     }
 
@@ -107,27 +126,46 @@ public class AiProviderService {
 
     // ── Claude ────────────────────────────────────────────────────────────────
 
-    private String callClaude(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
+    private String callClaude(String systemPrompt, String userMessage, String imageBase64, String mimeType,
+                              String fileBase64, String fileMimeType, String apiKey) {
         try {
+            boolean hasImage = imageBase64 != null && !imageBase64.isBlank();
+            boolean hasFile = fileBase64 != null && !fileBase64.isBlank();
+
             ObjectNode body = mapper.createObjectNode();
-            body.put("model", "claude-3-5-haiku-20241022");
-            body.put("max_tokens", 400);
+            // claude-3-5-haiku does NOT support document (PDF) blocks — use Sonnet for PDFs
+            body.put("model", hasFile ? "claude-3-5-sonnet-20241022" : "claude-3-5-haiku-20241022");
+            // PDFs may yield multi-item invoices → give more output tokens
+            body.put("max_tokens", hasFile ? 800 : 400);
             body.put("system", systemPrompt);
 
             ArrayNode messages = mapper.createArrayNode();
             ObjectNode userMsg = mapper.createObjectNode();
             userMsg.put("role", "user");
 
-            if (imageBase64 != null && !imageBase64.isBlank()) {
+            if (hasFile || hasImage) {
                 ArrayNode content = mapper.createArrayNode();
-                ObjectNode imgBlock = mapper.createObjectNode();
-                imgBlock.put("type", "image");
-                ObjectNode source = mapper.createObjectNode();
-                source.put("type", "base64");
-                source.put("media_type", mimeType != null ? mimeType : "image/jpeg");
-                source.put("data", imageBase64);
-                imgBlock.set("source", source);
-                content.add(imgBlock);
+                if (hasFile) {
+                    // PDF via Claude's document content block
+                    ObjectNode docBlock = mapper.createObjectNode();
+                    docBlock.put("type", "document");
+                    ObjectNode docSource = mapper.createObjectNode();
+                    docSource.put("type", "base64");
+                    docSource.put("media_type", fileMimeType != null ? fileMimeType : "application/pdf");
+                    docSource.put("data", fileBase64);
+                    docBlock.set("source", docSource);
+                    content.add(docBlock);
+                }
+                if (hasImage) {
+                    ObjectNode imgBlock = mapper.createObjectNode();
+                    imgBlock.put("type", "image");
+                    ObjectNode source = mapper.createObjectNode();
+                    source.put("type", "base64");
+                    source.put("media_type", mimeType != null ? mimeType : "image/jpeg");
+                    source.put("data", imageBase64);
+                    imgBlock.set("source", source);
+                    content.add(imgBlock);
+                }
                 ObjectNode textBlock = mapper.createObjectNode();
                 textBlock.put("type", "text");
                 textBlock.put("text", userMessage);
@@ -140,10 +178,16 @@ public class AiProviderService {
             messages.add(userMsg);
             body.set("messages", messages);
 
-            String response = webClient.post()
+            // PDF document blocks require the pdfs beta header
+            WebClient.RequestBodySpec claudeReq = webClient.post()
                     .uri(CLAUDE_URL)
                     .header("x-api-key", apiKey)
-                    .header("anthropic-version", "2023-06-01")
+                    .header("anthropic-version", "2023-06-01");
+            if (hasFile) {
+                claudeReq = claudeReq.header("anthropic-beta", "pdfs-2024-09-25");
+            }
+
+            String response = claudeReq
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
@@ -196,7 +240,8 @@ public class AiProviderService {
 
     // ── OpenAI ────────────────────────────────────────────────────────────────
 
-    private String callOpenAI(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
+    private String callOpenAI(String systemPrompt, String userMessage, String imageBase64, String mimeType,
+                              String fileBase64, String fileMimeType, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", "gpt-4o-mini");
@@ -212,21 +257,40 @@ public class AiProviderService {
             ObjectNode userMsg = mapper.createObjectNode();
             userMsg.put("role", "user");
 
-            if (imageBase64 != null && !imageBase64.isBlank()) {
+            // OpenAI vision: PDF → render first page as PNG, then send as image_url
+            boolean hasPdf = fileBase64 != null && !fileBase64.isBlank();
+            String visibleImageBase64 = imageBase64;
+            String visibleMimeType = mimeType;
+            boolean pdfConverted = false;
+            if (hasPdf) {
+                try {
+                    visibleImageBase64 = pdfFirstPageToBase64Png(fileBase64);
+                    visibleMimeType = "image/png";
+                    pdfConverted = true;
+                } catch (Exception e) {
+                    // PDF rendering failed — fall through, send text only
+                }
+            }
+
+            String effectiveMessage = (hasPdf && !pdfConverted)
+                    ? userMessage + "\n[PDF adjunto no pudo procesarse como imagen. Analizá el texto disponible.]"
+                    : userMessage;
+
+            if (visibleImageBase64 != null && !visibleImageBase64.isBlank()) {
                 ArrayNode content = mapper.createArrayNode();
                 ObjectNode imgBlock = mapper.createObjectNode();
                 imgBlock.put("type", "image_url");
                 ObjectNode imgUrl = mapper.createObjectNode();
-                imgUrl.put("url", "data:" + (mimeType != null ? mimeType : "image/jpeg") + ";base64," + imageBase64);
+                imgUrl.put("url", "data:" + (visibleMimeType != null ? visibleMimeType : "image/jpeg") + ";base64," + visibleImageBase64);
                 imgBlock.set("image_url", imgUrl);
                 content.add(imgBlock);
                 ObjectNode textBlock = mapper.createObjectNode();
                 textBlock.put("type", "text");
-                textBlock.put("text", userMessage);
+                textBlock.put("text", effectiveMessage);
                 content.add(textBlock);
                 userMsg.set("content", content);
             } else {
-                userMsg.put("content", userMessage);
+                userMsg.put("content", effectiveMessage);
             }
 
             messages.add(userMsg);
@@ -291,7 +355,8 @@ public class AiProviderService {
 
     // ── Gemini ────────────────────────────────────────────────────────────────
 
-    private String callGemini(String systemPrompt, String userMessage, String imageBase64, String mimeType, String apiKey) {
+    private String callGemini(String systemPrompt, String userMessage, String imageBase64, String mimeType,
+                              String fileBase64, String fileMimeType, String apiKey) {
         try {
             ObjectNode body = mapper.createObjectNode();
 
@@ -307,6 +372,16 @@ public class AiProviderService {
             ObjectNode content = mapper.createObjectNode();
             content.put("role", "user");
             ArrayNode parts = mapper.createArrayNode();
+
+            // PDF via inline_data (Gemini supports PDFs the same way as images)
+            if (fileBase64 != null && !fileBase64.isBlank()) {
+                ObjectNode filePart = mapper.createObjectNode();
+                ObjectNode fileInline = mapper.createObjectNode();
+                fileInline.put("mime_type", fileMimeType != null ? fileMimeType : "application/pdf");
+                fileInline.put("data", fileBase64);
+                filePart.set("inline_data", fileInline);
+                parts.add(filePart);
+            }
 
             if (imageBase64 != null && !imageBase64.isBlank()) {
                 ObjectNode imgPart = mapper.createObjectNode();
@@ -343,6 +418,25 @@ public class AiProviderService {
             throw new RuntimeException("Error Gemini " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
         } catch (Exception e) {
             throw new RuntimeException("Error llamando a Gemini: " + e.getMessage());
+        }
+    }
+
+    // ── PDF rendering ─────────────────────────────────────────────────────────
+
+    /**
+     * Renders the first page of a base64-encoded PDF to a base64 PNG image.
+     * Used so providers without native PDF support (OpenAI) can process invoices via vision.
+     */
+    private String pdfFirstPageToBase64Png(String pdfBase64) throws IOException {
+        System.setProperty("java.awt.headless", "true");
+        byte[] pdfBytes = Base64.getDecoder().decode(pdfBase64);
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            if (document.getNumberOfPages() == 0) throw new IOException("PDF sin páginas.");
+            PDFRenderer renderer = new PDFRenderer(document);
+            BufferedImage image = renderer.renderImageWithDPI(0, 150, ImageType.RGB);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
         }
     }
 

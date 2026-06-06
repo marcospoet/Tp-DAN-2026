@@ -1,7 +1,7 @@
 {
-  "name": "BudgetBuddy - Finanzas con IA",
-  "short_name": "BudgetBuddy",
-  "description": "Rastreador de gastos con IA para la economía argentina. Registrá gastos por texto, foto o audio.",
+  "name": "Pesito - Tu asistente financiero con IA",
+  "short_name": "Pesito",
+  "description": "Pesito es tu asistente financiero personal con IA para la economía argentina. Registrá gastos por texto, foto o audio.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

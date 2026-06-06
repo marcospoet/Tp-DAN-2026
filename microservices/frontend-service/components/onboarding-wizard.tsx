@@ -120,7 +120,7 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
                     ¡Bienvenido/a{userName && userName !== "Usuario" ? `, ${userName.split(" ")[0]}` : ""}!
                   </h2>
                   <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    Configuremos tu experiencia en 1 paso para que BudgetBuddy funcione exactamente como necesitás.
+                    Configuremos tu experiencia en 1 paso para que Pesito funcione exactamente como necesitás.
                   </p>
                 </div>
                 <button

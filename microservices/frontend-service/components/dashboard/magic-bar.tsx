@@ -252,7 +252,7 @@ export function MagicBar({
         {/* Hidden file inputs */}
         <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} multiple />
         <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
-        <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" className="hidden" onChange={handleFileSelect} multiple />
+        <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
 
         <div className="magic-border rounded-xl p-[1px]">
           <div className="bg-background rounded-[11px] px-4 py-3">
@@ -423,7 +423,7 @@ export function MagicBar({
                     className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
                   >
                     <FileText className="w-4 h-4 text-primary" />
-                    <span>Archivo</span>
+                    <span>PDF</span>
                   </button>
                 </motion.div>
               )}

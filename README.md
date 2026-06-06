@@ -1,7 +1,21 @@
-# BudgetBuddy — TP DAN 2026
+# Pesito — TP DAN 2026
 
-Aplicación de gestión de finanzas personales construida con arquitectura de microservicios.
+Asistente financiero personal con IA para la economía argentina, construido con arquitectura de microservicios.
 Trabajo Práctico — Desarrollo de Aplicaciones en la Nube — UTN FRSF.
+
+---
+
+## Qué es Pesito
+
+Pesito te permite registrar gastos e ingresos hablándole en lenguaje natural, por texto, foto, audio o PDF de factura.
+La IA interpreta el mensaje, extrae monto, categoría, moneda y medio de pago, y crea la transacción automáticamente.
+
+**Ejemplos de uso:**
+- `"Pesito gasté 3500 en el super con Galicia"` → gasto · Supermercado · $3.500 · cuenta: Banco Galicia
+- `"Pesito cobré mi sueldo de 200000"` → ingreso · Trabajo · $200.000
+- `"gasté 50 dólares blue en ropa"` → gasto · General · USD 50 · tipo Blue
+- `"almorcé 1200 y tomé café 400"` → dos transacciones en un envío
+- Foto de ticket / PDF de factura → extrae el total automáticamente
 
 ---
 
@@ -11,8 +25,8 @@ Trabajo Práctico — Desarrollo de Aplicaciones en la Nube — UTN FRSF.
           ┌──────────────┐     ┌───────────────────┐
           │    Browser   │     │   Bruno / Client   │
           └──────┬───────┘     └─────────┬──────────┘
-                 │ :30300 (K8s)          │ :8080 (Docker)
-                 │ :3000  (Docker)       │ :30080 (K8s)
+                 │ :3001 (Docker)        │ :8080 (Docker)
+                 │ :30300 (K8s)          │ :30080 (K8s)
       ┌──────────▼──────────┐  ┌────────▼─────────┐
       │  frontend-service   │  │   API Gateway    │  ← único punto de entrada de la API
       │   Next.js :3000     │  └────────┬─────────┘
@@ -48,6 +62,7 @@ Trabajo Práctico — Desarrollo de Aplicaciones en la Nube — UTN FRSF.
 Para desarrollo local sin Docker:
 - Java 21
 - Maven 3.9+
+- Node.js 20+
 - PostgreSQL 16, MongoDB 7, RabbitMQ 3.13
 
 ---
@@ -67,7 +82,7 @@ cd tp-dan-2026
 cp .env.example .env
 ```
 
-Editar `.env` y reemplazar todos los valores `cambiar_en_produccion`.  
+Editar `.env` y reemplazar todos los valores `cambiar_en_produccion`.
 Generar el JWT secret con:
 
 ```powershell
@@ -86,7 +101,7 @@ openssl rand -hex 64
 docker compose up --build
 ```
 
-El primer build tarda varios minutos (descarga dependencias Maven).  
+El primer build tarda varios minutos (descarga dependencias Maven y npm).
 Los servicios arrancan en orden gracias a `depends_on` + healthchecks.
 
 ### 4. Verificar que todo esté sano
@@ -95,7 +110,7 @@ Los servicios arrancan en orden gracias a `depends_on` + healthchecks.
 docker compose ps
 ```
 
-Todos los servicios deben estar en estado `healthy` o `running`.  
+Todos los servicios deben estar en estado `healthy` o `running`.
 Verificar el health del gateway:
 
 ```bash
@@ -106,9 +121,9 @@ curl http://localhost:8080/actuator/health
 
 ## Servicios y puertos
 
-| Servicio | Puerto (host) | URL (Docker Compose) |
+| Servicio | Puerto (host) | URL |
 |---|---|---|
-| Frontend | `3001` | http://localhost:3001 |
+| Frontend (Pesito UI) | `3001` | http://localhost:3001 |
 | API Gateway | `8080` | http://localhost:8080 |
 | auth-service | `8081` | http://localhost:8081 |
 | transaction-service | `8082` | http://localhost:8082 |
@@ -140,8 +155,6 @@ El repositorio incluye una colección [Bruno](https://www.usebruno.com/) lista p
 
 ### Orden de ejecución
 
-Los requests deben ejecutarse en orden porque los scripts de post-respuesta populan las variables de entorno:
-
 ```
 1. auth-service / register   → crea usuario, guarda {{token}} y {{userId}}
 2. auth-service / login      → refresca {{token}} y {{userId}}
@@ -153,7 +166,7 @@ Los requests deben ejecutarse en orden porque los scripts de post-respuesta popu
 
 | Variable | Valor por defecto | Descripción |
 |---|---|---|
-| `userEmail` | `test@budgetbuddy.com` | Email para register/login |
+| `userEmail` | `test@pesito.com` | Email para register/login |
 | `userPassword` | `password123` | Password para register/login |
 | `token` | *(se setea automático)* | JWT devuelto por register/login |
 | `userId` | *(se setea automático)* | UUID del usuario autenticado |
@@ -184,14 +197,50 @@ Todos los endpoints requieren `Authorization: Bearer <token>` y el header `X-Use
 | `GET` | `/api/transactions/{id}` | Obtener por ID |
 | `PUT` | `/api/transactions/{id}` | Actualizar |
 | `DELETE` | `/api/transactions/{id}` | Eliminar |
+| `POST` | `/api/transactions/{id}/receipt` | Subir imagen de comprobante (MinIO) |
 | `GET` | `/api/exchange-rates` | Cotizaciones ARS/USD actuales |
+
+### ai-service (`/api/ai`)
+
+Todos los endpoints leen `X-User-Id` del header (inyectado por el Gateway).
+
+| Método | Path | Descripción |
+|---|---|---|
+| `POST` | `/api/ai/parse` | Texto / imagen / audio / PDF → transacción(es) JSON |
+| `POST` | `/api/ai/chat` | Mensaje conversacional → respuesta del asistente Pesito |
+| `POST` | `/api/ai/detect-intent` | Detectar intención: `update`, `delete` o `recurring` |
+| `POST` | `/api/ai/csv-mapping` | Identificar columnas de un CSV bancario |
+| `POST` | `/api/ai/transcribe` | Transcribir audio (OpenAI Whisper / Gemini) |
 
 ### Swagger UI
 
-Cada microservicio expone su documentación interactiva:
+Cada microservicio Java expone su documentación interactiva:
 
 - auth-service: http://localhost:8081/swagger-ui.html
 - transaction-service: http://localhost:8082/swagger-ui.html
+
+---
+
+## Proveedores de IA
+
+El ai-service soporta tres proveedores configurables vía variables de entorno en `.env`:
+
+| Variable | Descripción |
+|---|---|
+| `AI_PROVIDER` | Proveedor por defecto: `claude`, `openai` o `gemini` |
+| `CLAUDE_API_KEY` | API key de Anthropic (claude-3-5-haiku / claude-3-5-sonnet para PDFs) |
+| `OPENAI_API_KEY` | API key de OpenAI (gpt-4o-mini con soporte de visión) |
+| `GEMINI_API_KEY` | API key de Google (gemini-2.0-flash) |
+
+El proveedor se puede cambiar desde la UI de Pesito en Ajustes sin reiniciar el servicio.
+
+### Soporte de PDFs
+
+Cuando el usuario adjunta una factura en PDF desde la Magic Bar:
+
+- **Claude** → usa `claude-3-5-sonnet-20241022` con bloque `"type":"document"` (lectura nativa del PDF)
+- **OpenAI** → convierte la primera página a imagen PNG con Apache PDFBox y la envía via visión (`gpt-4o-mini`)
+- **Gemini** → envía el PDF como `inline_data` (soporte nativo de gemini-2.0-flash)
 
 ---
 
@@ -204,8 +253,15 @@ PostgreSQL usa dos schemas separados con usuarios dedicados:
 | `auth` | `auth_user` | auth-service |
 | `txn` | `txn_user` | transaction-service |
 
-Las migraciones las gestiona **Flyway** automáticamente al arrancar cada servicio.  
+Las migraciones las gestiona **Flyway** automáticamente al arrancar cada servicio.
 Los scripts están en `src/main/resources/db/migration/` de cada microservicio.
+
+MongoDB lo usa exclusivamente el **ai-service**:
+
+| Colección | Contenido |
+|---|---|
+| `chat_sessions` | Sesiones de conversación por usuario |
+| `chat_messages` | Historial de mensajes del asistente Pesito |
 
 ### Resetear la base de datos
 
@@ -220,8 +276,21 @@ Para borrar solo un usuario específico (sin perder el resto):
 
 ```bash
 docker exec -it bb-postgres psql -U postgres -d budgetbuddy \
-  -c "DELETE FROM auth.users WHERE email = 'test@budgetbuddy.com';"
+  -c "DELETE FROM auth.users WHERE email = 'test@pesito.com';"
 ```
+
+---
+
+## Almacenamiento de comprobantes (MinIO)
+
+Las imágenes de tickets y recibos se almacenan en **MinIO** (S3-compatible):
+
+- Bucket: `receipts`
+- Subida via `POST /api/transactions/{id}/receipt` (multipart/form-data)
+- La URL del comprobante se guarda en el campo `receipt_url` de la transacción
+
+Acceder a la consola de MinIO: http://localhost:9001
+Credenciales: las definidas en `.env` (`MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`)
 
 ---
 
@@ -229,9 +298,9 @@ docker exec -it bb-postgres psql -U postgres -d budgetbuddy \
 
 | Evento | Publicado por | Consumido por |
 |---|---|---|
-| `user.registered` | auth-service | *(ai-service, futuro)* |
-| `user.deleted` | auth-service | transaction-service |
-| `transaction.created` | transaction-service | *(ai-service, futuro)* |
+| `user.registered` | auth-service | *(log / futuras notificaciones)* |
+| `user.deleted` | auth-service | transaction-service (limpia transacciones del usuario) |
+| `transaction.created` | transaction-service | ai-service (invalida cache de analytics) |
 
 ---
 
@@ -254,7 +323,7 @@ Para correr un microservicio de forma aislada, levantá la infraestructura con D
 
 ```bash
 # Desde la raíz del repo — levanta solo la infraestructura
-docker compose up postgres rabbitmq eureka-server -d
+docker compose up postgres mongodb rabbitmq minio eureka-server -d
 ```
 
 ```bash
@@ -265,6 +334,15 @@ mvn -pl auth-service spring-boot:run "-Dspring-boot.run.profiles=local"
 
 El perfil `local` usa las credenciales definidas en `application-local.properties`.
 
+Para el frontend:
+
+```bash
+cd microservices/frontend-service
+npm install
+# Crear .env.local con BACKEND_URL=http://localhost:8080
+npm run dev   # http://localhost:3000
+```
+
 ---
 
 ## Estructura del repositorio
@@ -273,15 +351,15 @@ El perfil `local` usa las credenciales definidas en `application-local.propertie
 tp-dan-2026/
 ├── microservices/
 │   ├── pom.xml                  ← parent POM (gestiona versiones)
-│   ├── eureka-server/           ← Service Discovery
-│   ├── api-gateway/             ← Spring Cloud Gateway
-│   ├── auth-service/            ← Autenticación y perfiles
-│   ├── transaction-service/     ← Transacciones financieras
-│   ├── ai-service/              ← Asistente IA (en desarrollo)
-│   └── frontend-service/        ← Next.js (UI web)
+│   ├── eureka-server/           ← Service Discovery (Spring Cloud Netflix Eureka)
+│   ├── api-gateway/             ← Spring Cloud Gateway + filtro JWT
+│   ├── auth-service/            ← Autenticación, perfiles, JWT
+│   ├── transaction-service/     ← CRUD de transacciones, exchange rates, MinIO
+│   ├── ai-service/              ← Pesito IA (Claude/OpenAI/Gemini), chat, parseo de PDF
+│   └── frontend-service/        ← Next.js App Router (UI de Pesito)
 ├── infrastructure/
-│   ├── postgres/                ← init.sh (crea schemas y usuarios)
-│   ├── mongodb/                 ← init-mongo.js
+│   ├── postgres/                ← init.sh (crea schemas auth/txn y usuarios)
+│   ├── mongodb/                 ← init-mongo.js (crea ai_db y ai_user)
 │   ├── prometheus/
 │   ├── grafana/
 │   ├── loki/
@@ -368,27 +446,19 @@ docker info | grep Name
 
 #### Paso 3 — Buildear todas las imágenes dentro de Minikube
 
-Los microservicios Spring Boot usan la raíz de `microservices/` como contexto de build.  
+Los microservicios Spring Boot usan la raíz de `microservices/` como contexto de build.
 El frontend usa su propia carpeta como contexto.
 
 ```bash
 # Microservicios Spring Boot (contexto: ./microservices)
-docker build -f microservices/eureka-server/Dockerfile       -t budgetbuddy/eureka-server:latest       ./microservices
-docker build -f microservices/api-gateway/Dockerfile         -t budgetbuddy/api-gateway:latest         ./microservices
-docker build -f microservices/auth-service/Dockerfile        -t budgetbuddy/auth-service:latest        ./microservices
-docker build -f microservices/transaction-service/Dockerfile -t budgetbuddy/transaction-service:latest ./microservices
-docker build -f microservices/ai-service/Dockerfile          -t budgetbuddy/ai-service:latest          ./microservices
+docker build -f microservices/eureka-server/Dockerfile       -t pesito/eureka-server:latest       ./microservices
+docker build -f microservices/api-gateway/Dockerfile         -t pesito/api-gateway:latest         ./microservices
+docker build -f microservices/auth-service/Dockerfile        -t pesito/auth-service:latest        ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t pesito/transaction-service:latest ./microservices
+docker build -f microservices/ai-service/Dockerfile          -t pesito/ai-service:latest          ./microservices
 
 # Frontend (contexto: ./microservices/frontend-service)
-docker build -f microservices/frontend-service/Dockerfile    -t budgetbuddy/frontend-service:latest    ./microservices/frontend-service
-
-# Verificar que todas quedaron disponibles (Linux/Mac/WSL)
-docker images | grep budgetbuddy
-```
-
-```powershell
-# Verificar que todas quedaron disponibles (PowerShell)
-docker images | Select-String "budgetbuddy"
+docker build -f microservices/frontend-service/Dockerfile    -t pesito/frontend-service:latest    ./microservices/frontend-service
 ```
 
 ---
@@ -407,20 +477,7 @@ Copy-Item k8s\01-secrets.example.yaml k8s\01-secrets.yaml
 cp k8s/01-secrets.example.yaml k8s/01-secrets.yaml
 ```
 
-Generar un JWT_SECRET seguro de al menos 64 caracteres:
-
-```powershell
-# PowerShell (Windows)
-$bytes = New-Object byte[] 64; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); [System.BitConverter]::ToString($bytes).Replace('-','').ToLower()
-```
-
-```bash
-# Linux / Mac / WSL
-openssl rand -hex 64
-```
-
-Editar `k8s/01-secrets.yaml` y reemplazar **todos** los valores `CHANGE_ME` con credenciales reales.  
-Los campos disponibles son:
+Editar `k8s/01-secrets.yaml` y reemplazar **todos** los valores `CHANGE_ME`:
 
 | Campo | Descripción |
 |---|---|
@@ -431,8 +488,11 @@ Los campos disponibles son:
 | `MONGO_APP_PASSWORD` | Contraseña del usuario `ai_user` |
 | `RABBITMQ_PASSWORD` | Contraseña del usuario `admin` de RabbitMQ |
 | `MINIO_SECRET_KEY` | Secret key de MinIO (mínimo 8 caracteres) |
-| `JWT_SECRET` | Secret para firmar JWTs (mínimo 64 caracteres) |
+| `JWT_SECRET` | Secret para firmar JWTs (mínimo 64 caracteres hex) |
 | `GRAFANA_PASSWORD` | Contraseña del usuario `admin` de Grafana |
+| `CLAUDE_API_KEY` | API key de Anthropic (opcional si usás otro proveedor) |
+| `OPENAI_API_KEY` | API key de OpenAI (opcional) |
+| `GEMINI_API_KEY` | API key de Google (opcional) |
 
 ---
 
@@ -453,13 +513,13 @@ kubectl apply -f k8s/infrastructure/
 kubectl apply -f k8s/infrastructure/observability/
 ```
 
-Esperar a que la infraestructura core esté lista antes de levantar los microservicios:
+Esperar a que la infraestructura core esté lista:
 
 ```bash
-kubectl wait --for=condition=ready pod -l app=postgres  -n budgetbuddy --timeout=180s
-kubectl wait --for=condition=ready pod -l app=rabbitmq  -n budgetbuddy --timeout=180s
-kubectl wait --for=condition=ready pod -l app=mongodb   -n budgetbuddy --timeout=180s
-kubectl wait --for=condition=ready pod -l app=minio     -n budgetbuddy --timeout=180s
+kubectl wait --for=condition=ready pod -l app=postgres  -n pesito --timeout=180s
+kubectl wait --for=condition=ready pod -l app=rabbitmq  -n pesito --timeout=180s
+kubectl wait --for=condition=ready pod -l app=mongodb   -n pesito --timeout=180s
+kubectl wait --for=condition=ready pod -l app=minio     -n pesito --timeout=180s
 ```
 
 ```bash
@@ -472,77 +532,39 @@ kubectl apply -f k8s/microservices/
 #### Paso 6 — Verificar el estado
 
 ```bash
-# Ver todos los pods del namespace
-kubectl get pods -n budgetbuddy
-
-# Ver todos los servicios y sus puertos
-kubectl get svc -n budgetbuddy
+kubectl get pods -n pesito
+kubectl get svc  -n pesito
 ```
 
-Todos los pods deben llegar a estado `Running`. Si alguno queda en `CrashLoopBackOff` o `Pending`:
+Si algún pod queda en `CrashLoopBackOff` o `Pending`:
 
 ```bash
-# Ver logs del contenedor
-kubectl logs -n budgetbuddy deployment/<nombre-del-servicio>
-
-# Ver eventos del pod (útil para errores de scheduling o imagen no encontrada)
-kubectl describe pod -n budgetbuddy -l app=<nombre-del-servicio>
-```
-
-Ejemplo para auth-service:
-
-```bash
-kubectl logs -n budgetbuddy deployment/auth-service --tail=50
-kubectl describe pod -n budgetbuddy -l app=auth-service
+kubectl logs -n pesito deployment/<nombre-del-servicio>
+kubectl describe pod -n pesito -l app=<nombre-del-servicio>
 ```
 
 ---
 
 #### Paso 7 — Acceder a los servicios
 
-**API Gateway y Frontend (NodePort — acceso directo sin port-forward)**
-
 ```bash
-# Obtener la IP de Minikube
 minikube ip
-
-# Abrir directamente en el browser
-minikube service api-gateway      -n budgetbuddy
-minikube service frontend-service -n budgetbuddy
+minikube service api-gateway      -n pesito
+minikube service frontend-service -n pesito
 ```
 
-Los NodePorts fijos son:
+NodePorts fijos:
 - API Gateway → `http://<minikube-ip>:30080`
 - Frontend → `http://<minikube-ip>:30300`
 
-Con el API Gateway en `<minikube-ip>:30080`, actualizar el environment de Bruno para que la variable `baseUrl` apunte a esa dirección.
-
-**Herramientas internas (ClusterIP — requieren port-forward)**
-
-Abrir cada uno en una terminal separada (o en background con `&` en bash):
+**Herramientas internas (port-forward):**
 
 ```bash
-# Grafana — dashboards
-kubectl port-forward -n budgetbuddy svc/grafana 3000:3000
-
-# Eureka Dashboard
-kubectl port-forward -n budgetbuddy svc/eureka-server 8761:8761
-
-# RabbitMQ Management
-kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672
-
-# Prometheus
-kubectl port-forward -n budgetbuddy svc/prometheus 9090:9090
-
-# MinIO Console
-kubectl port-forward -n budgetbuddy svc/minio 9001:9001
-```
-
-```powershell
-# PowerShell: ejecutar varios port-forwards en background
-Start-Job { kubectl port-forward -n budgetbuddy svc/grafana 3000:3000 }
-Start-Job { kubectl port-forward -n budgetbuddy svc/eureka-server 8761:8761 }
-Start-Job { kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672 }
+kubectl port-forward -n pesito svc/grafana      3000:3000
+kubectl port-forward -n pesito svc/eureka-server 8761:8761
+kubectl port-forward -n pesito svc/rabbitmq     15672:15672
+kubectl port-forward -n pesito svc/prometheus    9090:9090
+kubectl port-forward -n pesito svc/minio         9001:9001
 ```
 
 ---
@@ -550,8 +572,7 @@ Start-Job { kubectl port-forward -n budgetbuddy svc/rabbitmq 15672:15672 }
 #### Paso 8 — Destruir el entorno
 
 ```bash
-# Elimina todos los recursos del namespace (pods, services, PVCs, etc.)
-kubectl delete namespace budgetbuddy
+kubectl delete namespace pesito
 ```
 
 ---
@@ -579,67 +600,53 @@ kubectl delete namespace budgetbuddy
 **1. Buildear y publicar las imágenes en un registry**
 
 ```bash
-# Reemplazar "tu-org" con tu usuario/organización de Docker Hub
-docker build -f microservices/eureka-server/Dockerfile       -t tu-org/budgetbuddy-eureka:1.0.0       ./microservices
-docker build -f microservices/api-gateway/Dockerfile         -t tu-org/budgetbuddy-gateway:1.0.0      ./microservices
-docker build -f microservices/auth-service/Dockerfile        -t tu-org/budgetbuddy-auth:1.0.0         ./microservices
-docker build -f microservices/transaction-service/Dockerfile -t tu-org/budgetbuddy-transaction:1.0.0  ./microservices
-docker build -f microservices/ai-service/Dockerfile          -t tu-org/budgetbuddy-ai:1.0.0           ./microservices
-docker build -f microservices/frontend-service/Dockerfile    -t tu-org/budgetbuddy-frontend:1.0.0     ./microservices/frontend-service
+docker build -f microservices/eureka-server/Dockerfile       -t tu-org/pesito-eureka:1.0.0       ./microservices
+docker build -f microservices/api-gateway/Dockerfile         -t tu-org/pesito-gateway:1.0.0      ./microservices
+docker build -f microservices/auth-service/Dockerfile        -t tu-org/pesito-auth:1.0.0         ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t tu-org/pesito-transaction:1.0.0  ./microservices
+docker build -f microservices/ai-service/Dockerfile          -t tu-org/pesito-ai:1.0.0           ./microservices
+docker build -f microservices/frontend-service/Dockerfile    -t tu-org/pesito-frontend:1.0.0     ./microservices/frontend-service
 
-docker push tu-org/budgetbuddy-eureka:1.0.0
-docker push tu-org/budgetbuddy-gateway:1.0.0
-docker push tu-org/budgetbuddy-auth:1.0.0
-docker push tu-org/budgetbuddy-transaction:1.0.0
-docker push tu-org/budgetbuddy-ai:1.0.0
-docker push tu-org/budgetbuddy-frontend:1.0.0
+docker push tu-org/pesito-eureka:1.0.0
+docker push tu-org/pesito-gateway:1.0.0
+docker push tu-org/pesito-auth:1.0.0
+docker push tu-org/pesito-transaction:1.0.0
+docker push tu-org/pesito-ai:1.0.0
+docker push tu-org/pesito-frontend:1.0.0
 ```
 
 **2. Actualizar los nombres de imagen en los yamls**
 
-En cada archivo de `k8s/microservices/` cambiar el campo `image:` para que apunte al registry:
+En cada archivo de `k8s/microservices/` cambiar el campo `image:`:
 
 ```yaml
 # Antes (local Minikube)
-image: budgetbuddy/auth-service:latest
+image: pesito/auth-service:latest
 
 # Después (producción)
-image: tu-org/budgetbuddy-auth:1.0.0
+image: tu-org/pesito-auth:1.0.0
 ```
 
-Los archivos a editar son los 6 de `k8s/microservices/`.
-
-**3. Aplicar los manifiestos**
-
-El orden es el mismo que en local (Pasos 5 en adelante).  
-El cluster baja las imágenes del registry automáticamente (`imagePullPolicy: IfNotPresent`).
-
-**4. Exponer el API Gateway**
-
-En producción, reemplazar el `NodePort` del api-gateway y del frontend por `LoadBalancer` o agregar un `Ingress`:
+**3. En producción, reemplazar NodePort por LoadBalancer o Ingress**
 
 ```yaml
-# k8s/microservices/api-gateway.yaml — cambiar el tipo del Service
+# k8s/microservices/api-gateway.yaml
 spec:
-  type: LoadBalancer   # en vez de NodePort
+  type: LoadBalancer
 ```
 
 ---
 
 ## Troubleshooting
 
-**Los pods se crearon pero en Minikube no aparece nada / `minikube service` da SVC_NOT_FOUND**
+**Los pods se crearon pero en Minikube no aparece nada**
 
-kubectl apuntaba a Docker Desktop en vez de Minikube cuando se aplicaron los manifiestos. Todo se deployó en el cluster equivocado.
+kubectl apuntaba a Docker Desktop en vez de Minikube cuando se aplicaron los manifiestos.
 
 ```powershell
-# 1. Cambiar al contexto correcto
 kubectl config use-context minikube
-
-# 2. Verificar que el namespace budgetbuddy está vacío
-kubectl get all -n budgetbuddy
-
-# 3. Si está vacío, volver al Paso 5 y aplicar los manifiestos de nuevo
+kubectl get all -n pesito
+# Si está vacío, volver al Paso 5 y aplicar los manifiestos de nuevo
 ```
 
 ---
@@ -647,22 +654,28 @@ kubectl get all -n budgetbuddy
 **Los servicios no levantan / quedan en `starting`**
 
 Los microservicios esperan que Eureka, PostgreSQL y RabbitMQ estén `healthy` antes de arrancar.
-Si hay un problema, revisar los logs:
 
 ```bash
 docker compose logs eureka-server --tail=30
 docker compose logs postgres --tail=30
 ```
 
+---
+
 **403 en register o login**
 
-- Verificar que el servicio esté corrido con el código actualizado: `docker compose up --build auth-service`
-- Verificar que el environment `local` esté seleccionado en Bruno
+```bash
+docker compose up --build auth-service
+```
+
+---
 
 **400 en endpoints de transacciones**
 
 - El header `X-User-Id` requiere un UUID válido
-- Ejecutar register/login primero para que `{{userId}}` quede seteado en el environment de Bruno
+- Ejecutar register/login primero para que `{{userId}}` quede seteado en Bruno
+
+---
 
 **Email ya registrado al hacer register**
 
@@ -670,17 +683,20 @@ docker compose logs postgres --tail=30
 docker compose down -v && docker compose up --build
 ```
 
+---
+
 **`auth-service` falla con `password authentication failed for user "auth_user"`**
 
-El volumen `postgres_data` ya existía de un run anterior y el `init.sh` solo corre la primera vez. Los roles `auth_user`/`txn_user` nunca fueron creados (o quedaron con otra contraseña).
+El volumen `postgres_data` ya existía de un run anterior y el `init.sh` solo corre la primera vez.
 
 Opción A — sin perder datos (crear los roles manualmente):
 
 ```bash
-docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS txn;"
-docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE ROLE auth_user WITH LOGIN PASSWORD '<AUTH_DB_PASSWORD del .env>';"
-docker exec bb-postgres psql -U postgres -d budgetbuddy -c "CREATE ROLE txn_user WITH LOGIN PASSWORD '<TXN_DB_PASSWORD del .env>';"
 docker exec bb-postgres psql -U postgres -d budgetbuddy -c "
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS txn;
+CREATE ROLE auth_user WITH LOGIN PASSWORD '<AUTH_DB_PASSWORD del .env>';
+CREATE ROLE txn_user WITH LOGIN PASSWORD '<TXN_DB_PASSWORD del .env>';
 GRANT USAGE, CREATE ON SCHEMA auth TO auth_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO auth_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO auth_user;
@@ -695,7 +711,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON SEQUENCES TO txn_user;
 docker compose restart auth-service transaction-service
 ```
 
-Opción B — resetear todo (borra los datos):
+Opción B — resetear todo:
 
 ```bash
 docker compose down -v && docker compose up --build
@@ -703,9 +719,19 @@ docker compose down -v && docker compose up --build
 
 ---
 
+**La IA no responde / timeout**
+
+- Verificar que la API key esté configurada correctamente en `.env`
+- Revisar logs del ai-service: `docker compose logs ai-service -f`
+- El parse tiene un timeout de 30 segundos; si el proveedor está sobrecargado, reintentar
+
+---
+
 **Ver logs de un servicio específico**
 
 ```bash
-docker compose logs auth-service -f
+docker compose logs ai-service          -f
+docker compose logs auth-service        -f
 docker compose logs transaction-service -f
+docker compose logs frontend-service    -f
 ```

@@ -250,7 +250,7 @@ export function AnalyticsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `BudgetBuddy-${exportRangeLabel.replace(/[\s/]/g, "-")}.csv`
+    a.download = `Pesito-${exportRangeLabel.replace(/[\s/]/g, "-")}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -303,7 +303,7 @@ export function AnalyticsPage() {
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>BudgetBuddy — ${exportRangeLabel}</title>
+  <title>Pesito — ${exportRangeLabel}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;padding:32px;max-width:800px;margin:0 auto}
@@ -327,8 +327,8 @@ export function AnalyticsPage() {
 </head>
 <body>
   <div class="logo">
-    <div class="logo-dot">BB</div>
-    <h1>BudgetBuddy</h1>
+    <div class="logo-dot">P</div>
+    <h1>Pesito</h1>
   </div>
   <p class="subtitle">Resumen de ${exportRangeLabel} · Generado el ${new Date().toLocaleDateString("es-AR")}</p>
 
@@ -360,7 +360,7 @@ export function AnalyticsPage() {
     <tbody>${txRows || '<tr><td colspan="4" style="padding:16px;text-align:center;color:#9ca3af">Sin movimientos</td></tr>'}</tbody>
   </table>
 
-  <p class="footer">BudgetBuddy · finanzas-budget-buddy.vercel.app</p>
+  <p class="footer">Pesito · Tu asistente financiero con IA</p>
 </body>
 </html>`
 

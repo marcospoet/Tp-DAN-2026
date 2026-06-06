@@ -13,7 +13,7 @@ const ONBOARDING_STEPS = [
   },
   {
     Icon: Bot,
-    title: "BudgetBuddy AI",
+    title: "Pesito AI",
     description: "Preguntale al asistente sobre tus finanzas. Analizá tendencias, pedí consejos y chequeá en qué estás gastando más.",
   },
   {

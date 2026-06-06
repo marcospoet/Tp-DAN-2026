@@ -30,13 +30,13 @@ public class PromptService {
 
             Para ingresos usar type:"income".
 
-            Si el contenido NO describe ninguna transacción financiera respondé exactamente:
+            Si el contenido NO describe ninguna transacción financiera (y no es una factura, recibo o documento con importes) respondé exactamente:
             {"type":"unknown"}
 
             Reglas generales:
             - amount siempre es un número positivo (sin signos)
             - description: primera letra en mayúscula, máx 35 chars
-            - Si hay imagen de ticket o factura: extraé el monto total y el tipo de establecimiento
+            - Si hay imagen de ticket, foto de recibo o PDF de factura: ES UNA TRANSACCIÓN VÁLIDA. Extraé el monto TOTAL (buscá "Total", "Total a pagar", "Importe total", la última línea con importe numérico), el nombre del proveedor/establecimiento y la categoría. Si hay múltiples ítems, usá el total final. NUNCA respondas {"type":"unknown"} si el documento tiene importes visibles.
             - Si hay audio: transcribí y analizá el contenido
             - type "income" = cobro, ingreso, salario, venta, me pagaron, transferencia recibida
             - type "expense" = gasto, compra, pago, transferencia enviada, gasté

@@ -21,7 +21,7 @@ export function useBiometric() {
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: "BudgetBuddy", id: window.location.hostname },
+          rp: { name: "Pesito", id: window.location.hostname },
           user: {
             id: new TextEncoder().encode(userId),
             name: userName,

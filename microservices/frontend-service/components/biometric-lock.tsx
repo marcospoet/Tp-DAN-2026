@@ -46,7 +46,7 @@ export function BiometricLock({ onUnlock }: BiometricLockProps) {
           <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary">
             <Wallet className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">BudgetBuddy</h1>
+          <h1 className="text-2xl font-bold text-foreground">Pesito</h1>
           <p className="text-sm text-muted-foreground text-center">
             Verificá tu identidad para continuar
           </p>

@@ -5,6 +5,8 @@ public class ParseRequest {
     private String input = "";
     private String imageBase64;
     private String imageMimeType = "image/jpeg";
+    private String fileBase64;
+    private String fileMimeType;
     private String todayDate;
     private String provider;
     private String apiKey;
@@ -17,6 +19,12 @@ public class ParseRequest {
 
     public String getImageMimeType() { return imageMimeType; }
     public void setImageMimeType(String imageMimeType) { this.imageMimeType = imageMimeType; }
+
+    public String getFileBase64() { return fileBase64; }
+    public void setFileBase64(String fileBase64) { this.fileBase64 = fileBase64; }
+
+    public String getFileMimeType() { return fileMimeType; }
+    public void setFileMimeType(String fileMimeType) { this.fileMimeType = fileMimeType; }
 
     public String getTodayDate() { return todayDate; }
     public void setTodayDate(String todayDate) { this.todayDate = todayDate; }

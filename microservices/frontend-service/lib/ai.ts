@@ -233,12 +233,15 @@ export async function callAI(
   const today = new Date().toISOString().split("T")[0]
 
   const imageAttachment = attachments?.find(a => a.type === "image")
+  const fileAttachment = attachments?.find(a => a.type === "file")
 
   try {
     const data = await postToAiService<{ rawResponse: string }>("/parse", {
       input: safeInput,
       imageBase64: imageAttachment?.base64 ?? null,
       imageMimeType: imageAttachment?.mimeType ?? "image/jpeg",
+      fileBase64: fileAttachment?.base64 ?? null,
+      fileMimeType: fileAttachment?.mimeType ?? null,
       todayDate: today,
     }, provider as string, apiKey as string)
     return extractAndValidate(data.rawResponse)

@@ -50,7 +50,7 @@ public class AiController {
      * (reuses the existing extractAndValidate logic in lib/ai.ts).
      *
      * POST /api/ai/parse
-     * Body: { input, imageBase64?, imageMimeType?, todayDate? }
+     * Body: { input, imageBase64?, imageMimeType?, fileBase64?, fileMimeType?, todayDate? }
      */
     @PostMapping("/parse")
     public ResponseEntity<?> parse(
@@ -59,14 +59,26 @@ public class AiController {
         try {
             String safeInput = prompts.sanitizeUserInput(req.getInput());
             String userMessage = prompts.buildUserMessage(safeInput, req.getTodayDate());
+
+            // When a PDF/file is attached, append an explicit extraction instruction so the model
+            // knows it must read the document rather than rely only on the user's text.
+            boolean hasPdf = req.getFileBase64() != null && !req.getFileBase64().isBlank();
+            if (hasPdf) {
+                userMessage += "\n[PDF de factura adjunto. Leé el contenido del PDF y extraé: monto TOTAL (buscá 'Total', 'Total a pagar', 'Importe total' al pie del documento), nombre del proveedor/establecimiento y categoría del gasto. Respondé con JSON aunque el usuario no haya escrito texto.]";
+            }
+            log.info("Parsing request — input length: {}, hasPdf: {}", safeInput.length(), hasPdf);
+
             String raw = aiProvider.callSingleTurn(
                     PromptService.SYSTEM_PROMPT,
                     userMessage,
                     req.getImageBase64(),
                     req.getImageMimeType(),
+                    req.getFileBase64(),
+                    req.getFileMimeType(),
                     req.getProvider(),
                     req.getApiKey()
             );
+            log.info("Parse raw response: {}", raw);
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

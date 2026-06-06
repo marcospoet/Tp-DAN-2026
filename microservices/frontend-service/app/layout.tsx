@@ -9,14 +9,14 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
-  title: 'BudgetBuddy - Finanzas con IA',
-  description: 'Rastreador de gastos con IA para la economía argentina. Registrá gastos por texto, foto o audio.',
+  title: 'Pesito - Tu asistente financiero con IA',
+  description: 'Pesito es tu asistente financiero personal con IA para la economía argentina. Registrá gastos por texto, foto o audio.',
   metadataBase: new URL('https://finanzas-budget-buddy.vercel.app'),
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'BudgetBuddy',
+    title: 'Pesito',
   },
   icons: {
     icon: [

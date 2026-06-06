@@ -75,13 +75,13 @@ function drawCard(canvas: HTMLCanvasElement, opts: {
   ctx.fillStyle = "#08100d"
   ctx.font = "800 34px system-ui, -apple-system, sans-serif"
   ctx.textAlign = "center"; ctx.textBaseline = "middle"
-  ctx.fillText("B", 82, HY + 1)
+  ctx.fillText("P", 82, HY + 1)
 
   // App name
   ctx.fillStyle = "#ecfdf5"
   ctx.font = "700 46px system-ui, -apple-system, sans-serif"
   ctx.textAlign = "left"; ctx.textBaseline = "middle"
-  ctx.fillText("BudgetBuddy", 130, HY)
+  ctx.fillText("Pesito", 130, HY)
 
   // Month/year badge
   const badgeLabel = `${MONTH_NAMES[month]} ${year}`
@@ -223,7 +223,7 @@ function drawCard(canvas: HTMLCanvasElement, opts: {
   ctx.fillStyle = "#3a6650"
   ctx.font = "400 28px system-ui"
   ctx.textAlign = "left"; ctx.textBaseline = "middle"
-  ctx.fillText("Generado con BudgetBuddy", 108, fY + 16)
+  ctx.fillText("Generado con Pesito", 108, fY + 16)
 
   ctx.fillStyle = "#243d30"
   ctx.font = "400 24px system-ui"
@@ -292,7 +292,7 @@ export function ShareSummary({ transactions, usdRate }: ShareSummaryProps) {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `Resumen ${MONTH_NAMES[month]} ${year} · BudgetBuddy`,
+          title: `Resumen ${MONTH_NAMES[month]} ${year} · Pesito`,
         })
       } else {
         const url = URL.createObjectURL(blob)

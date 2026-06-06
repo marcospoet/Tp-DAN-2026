@@ -450,7 +450,11 @@ export function DashboardPage() {
     lastMagicSubmitRef.current = now
 
     const capturedAttachments = [...(directAttachments ?? attachments)]
-    setProcessingLabel(capturedAttachments.some(a => a.type === "audio") ? "Procesando audio..." : "Analizando con IA...")
+    setProcessingLabel(
+      capturedAttachments.some(a => a.type === "audio") ? "Procesando audio..." :
+      capturedAttachments.some(a => a.type === "file") ? "Analizando factura..." :
+      "Analizando con IA..."
+    )
     setIsProcessing(true)
     setAiError(null)
 
@@ -515,8 +519,15 @@ export function DashboardPage() {
           setTimeout(() => setAiError(null), 5000)
           return
         }
+        const hasPdf = nonAudioAttachments.some(a => a.type === "file")
+        if (hasPdf) {
+          // PDF attached but AI couldn't extract a transaction — don't redirect to chat (chat can't read PDFs either)
+          setAiError("No pude extraer una transacción del PDF. Describí el gasto manualmente o intentá con una foto del ticket.")
+          setTimeout(() => setAiError(null), 7000)
+          return
+        }
         if (!finalTextInput.trim()) {
-          // Only image/file — AI couldn't extract a transaction
+          // Only image — AI couldn't extract a transaction
           setAiError("No reconocí una transacción en la imagen. Describí el gasto con palabras.")
           setTimeout(() => setAiError(null), 5000)
           return
@@ -611,10 +622,7 @@ export function DashboardPage() {
 
   const MAX_FILE_SIZE = 8 * 1024 * 1024 // 8 MB
   const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]
-  const ALLOWED_FILE_TYPES = ["application/pdf", "text/plain", "text/csv", "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/zip"]
+  const ALLOWED_FILE_TYPES = ["application/pdf"]
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

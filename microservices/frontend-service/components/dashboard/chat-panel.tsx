@@ -181,7 +181,7 @@ export function ChatPanel({
                 <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground leading-none mb-1">BudgetBuddy AI</p>
+                <p className="text-sm font-semibold text-foreground leading-none mb-1">Pesito AI</p>
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   En línea
