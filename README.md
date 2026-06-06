@@ -330,6 +330,15 @@ minikube start --memory=6144 --cpus=4
 minikube status
 ```
 
+> **Importante:** `minikube start` debería cambiar el contexto de kubectl automáticamente, pero si tenés Docker Desktop instalado puede quedar apuntando al cluster equivocado. Verificar y corregir:
+>
+> ```powershell
+> # Verificar contexto actual
+> kubectl config current-context
+> # Debe decir "minikube". Si dice "docker-desktop", cambiar:
+> kubectl config use-context minikube
+> ```
+
 ---
 
 #### Paso 2 — Apuntar Docker al daemon interno de Minikube
@@ -615,6 +624,22 @@ spec:
 ---
 
 ## Troubleshooting
+
+**Los pods se crearon pero en Minikube no aparece nada / `minikube service` da SVC_NOT_FOUND**
+
+kubectl apuntaba a Docker Desktop en vez de Minikube cuando se aplicaron los manifiestos. Todo se deployó en el cluster equivocado.
+
+```powershell
+# 1. Cambiar al contexto correcto
+kubectl config use-context minikube
+
+# 2. Verificar que el namespace budgetbuddy está vacío
+kubectl get all -n budgetbuddy
+
+# 3. Si está vacío, volver al Paso 5 y aplicar los manifiestos de nuevo
+```
+
+---
 
 **Los servicios no levantan / quedan en `starting`**
 
