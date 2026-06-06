@@ -8,7 +8,7 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
 
   const headers = new Headers()
   req.headers.forEach((value, key) => {
-    if (!["host", "connection", "transfer-encoding"].includes(key.toLowerCase())) {
+    if (!["host", "connection", "transfer-encoding", "origin", "referer"].includes(key.toLowerCase())) {
       headers.set(key, value)
     }
   })
