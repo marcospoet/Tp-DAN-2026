@@ -106,9 +106,9 @@ curl http://localhost:8080/actuator/health
 
 ## Servicios y puertos
 
-| Servicio | Puerto | URL (Docker Compose) |
+| Servicio | Puerto (host) | URL (Docker Compose) |
 |---|---|---|
-| Frontend | `3000` | http://localhost:3000 |
+| Frontend | `3001` | http://localhost:3001 |
 | API Gateway | `8080` | http://localhost:8080 |
 | auth-service | `8081` | http://localhost:8081 |
 | transaction-service | `8082` | http://localhost:8082 |
@@ -116,8 +116,11 @@ curl http://localhost:8080/actuator/health
 | Eureka Dashboard | `8761` | http://localhost:8761 |
 | RabbitMQ Management | `15672` | http://localhost:15672 |
 | MinIO Console | `9001` | http://localhost:9001 |
+| MinIO API | `9000` | http://localhost:9000 |
 | Grafana | `3000` | http://localhost:3000 |
 | Prometheus | `9090` | http://localhost:9090 |
+| Loki | `3100` | http://localhost:3100 |
+| Tempo | `3200` | http://localhost:3200 |
 | PostgreSQL | `5432` | localhost:5432 |
 | MongoDB | `27017` | localhost:27017 |
 
