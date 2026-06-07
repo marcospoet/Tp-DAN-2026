@@ -17,7 +17,15 @@ export function usePerformanceMode(): boolean {
       return
     }
 
-    // 2. Detect software (CPU-only) WebGL renderer.
+    // 2. Mobile devices (touch + small screen) — GPU es real pero la CPU y el ancho
+    //    de banda de memoria son mucho más limitados que en desktop. Las animaciones
+    //    pesadas (SVG filters, spring physics, marquees) causan jank notorio en mobile.
+    if (window.matchMedia("(max-width: 768px) and (pointer: coarse)").matches) {
+      setLowPerf(true)
+      return
+    }
+
+    // 3. Detect software (CPU-only) WebGL renderer.
     //    When Chrome's "Use hardware acceleration when available" is OFF,
     //    WebGL falls back to SwiftShader (software renderer).
     try {

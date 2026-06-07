@@ -184,7 +184,23 @@ function FloatingCoin({ delay, x, size, dur }: { delay: number; x: string; size:
 
 // ── MarqueeRow ─────────────────────────────────────────────────────────────────
 function MarqueeRow({ items, dir }: { items: string[]; dir: 1 | -1 }) {
+  const lowPerf = useContext(PerfContext)
   const tripled = [...items, ...items, ...items]
+
+  // En mobile/low-perf: lista estática sin animación continua
+  if (lowPerf) {
+    return (
+      <div className="flex w-max">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center mx-6 whitespace-nowrap text-sm text-muted-foreground/55">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 mr-6 shrink-0" />
+            {item}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <motion.div
       className="flex w-max"

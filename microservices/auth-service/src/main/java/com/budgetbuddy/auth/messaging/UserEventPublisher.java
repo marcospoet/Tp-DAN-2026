@@ -2,10 +2,12 @@ package com.budgetbuddy.auth.messaging;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Map;
-import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -13,19 +15,23 @@ public class UserEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    public void publishUserRegistered(UUID userId, String email) {
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onUserRegistered(UserRegisteredEvent event) {
         rabbitTemplate.convertAndSend(
             RabbitConfig.EXCHANGE,
             RabbitConfig.KEY_USER_REGISTERED,
-            Map.of("userId", userId.toString(), "email", email, "event", "user.registered")
+            Map.of("userId", event.userId().toString(), "email", event.email(), "event", "user.registered")
         );
     }
 
-    public void publishUserDeleted(UUID userId, String email) {
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onUserDeleted(UserDeletedEvent event) {
         rabbitTemplate.convertAndSend(
             RabbitConfig.EXCHANGE,
             RabbitConfig.KEY_USER_DELETED,
-            Map.of("userId", userId.toString(), "email", email, "event", "user.deleted")
+            Map.of("userId", event.userId().toString(), "email", event.email(), "event", "user.deleted")
         );
     }
 }

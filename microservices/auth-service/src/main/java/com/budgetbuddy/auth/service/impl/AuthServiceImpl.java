@@ -6,7 +6,7 @@ import com.budgetbuddy.auth.exception.UserNotFoundException;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.budgetbuddy.auth.entity.Profile;
 import com.budgetbuddy.auth.entity.User;
-import com.budgetbuddy.auth.messaging.UserEventPublisher;
+import org.springframework.context.ApplicationEventPublisher;
 import com.budgetbuddy.auth.repository.UserRepository;
 import com.budgetbuddy.auth.security.JwtUtil;
 import com.budgetbuddy.auth.service.IAuthService;
@@ -17,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.budgetbuddy.auth.messaging.UserDeletedEvent;
+import com.budgetbuddy.auth.messaging.UserRegisteredEvent;
 import java.util.UUID;
 
 @Service
@@ -27,7 +29,7 @@ public class AuthServiceImpl implements IAuthService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final UserEventPublisher eventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -50,7 +52,7 @@ public class AuthServiceImpl implements IAuthService {
         user.setProfile(profile);
         userRepository.save(user);
 
-        eventPublisher.publishUserRegistered(user.getId(), user.getEmail());
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail()));
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getId());
         return new AuthResponse(token, user.getId(), user.getEmail());
@@ -134,7 +136,7 @@ public class AuthServiceImpl implements IAuthService {
             .orElseThrow(() -> new UserNotFoundException(email));
         UUID userId = user.getId();
         userRepository.delete(user);
-        eventPublisher.publishUserDeleted(userId, email);
+        eventPublisher.publishEvent(new UserDeletedEvent(userId, email));
     }
 
     private ProfileResponse toProfileResponse(User user, Profile p) {

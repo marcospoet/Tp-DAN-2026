@@ -379,15 +379,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    apiRequest<ProfileResponse>("/api/auth/profile")
-      .then(profile => {
+    Promise.all([
+      apiRequest<ProfileResponse>("/api/auth/profile"),
+      loadTransactions(""),
+    ])
+      .then(([profile]) => {
         const authUser: AuthUser = { id: profile.userId, email: profile.email }
         applyProfile(profile, authUser)
-        return loadTransactions(profile.userId)
-          .then(() => {
-            const saved = sessionStorage.getItem("bb_view") as View | null
-            setView(saved && AUTHENTICATED_VIEWS.includes(saved) ? saved : "dashboard")
-          })
+        const saved = sessionStorage.getItem("bb_view") as View | null
+        setView(saved && AUTHENTICATED_VIEWS.includes(saved) ? saved : "dashboard")
       })
       .catch(() => {
         removeToken()

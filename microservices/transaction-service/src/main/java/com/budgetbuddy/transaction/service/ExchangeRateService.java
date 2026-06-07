@@ -7,6 +7,8 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -39,6 +41,7 @@ public class ExchangeRateService {
     /**
      * Obtiene todas las cotizaciones del dólar (blue, oficial, tarjeta, mep, etc.)
      */
+    @Cacheable("exchange-rates")
     @CircuitBreaker(name = DOLAR_API, fallbackMethod = "getAllRatesFallback")
     @Retry(name = DOLAR_API)
     public List<ExchangeRateResponse> getAllRates() {
@@ -56,6 +59,11 @@ public class ExchangeRateService {
         return rates.stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @CacheEvict("exchange-rates")
+    public void evictRatesCache() {
+        log.info("Caché de cotizaciones invalidada manualmente");
     }
 
     private List<ExchangeRateResponse> getAllRatesFallback(Exception e) {

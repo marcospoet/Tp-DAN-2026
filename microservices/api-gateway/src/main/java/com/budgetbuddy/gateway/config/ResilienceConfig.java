@@ -99,7 +99,7 @@ public class ResilienceConfig {
 
         CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
                 .failureRateThreshold(60)
-                .slowCallDurationThreshold(Duration.ofSeconds(15))
+                .slowCallDurationThreshold(Duration.ofSeconds(25))
                 .slowCallRateThreshold(80)
                 .slidingWindowSize(5)
                 .minimumNumberOfCalls(3)

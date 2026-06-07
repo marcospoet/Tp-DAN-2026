@@ -34,7 +34,7 @@ services:
     image: postgres:16-alpine
     container_name: bb-postgres
     environment:
-      POSTGRES_DB: budgetbuddy
+      POSTGRES_DB: pesito
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Pasamos las contraseñas de los usuarios de app para que init.sh las use
@@ -148,7 +148,7 @@ services:
     container_name: bb-auth
     environment:
       POSTGRES_HOST: postgres
-      POSTGRES_DB: budgetbuddy
+      POSTGRES_DB: pesito
       AUTH_DB_USER: ${AUTH_DB_USER}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
@@ -181,7 +181,7 @@ services:
     container_name: bb-transactions
     environment:
       POSTGRES_HOST: postgres
-      POSTGRES_DB: budgetbuddy
+      POSTGRES_DB: pesito
       TXN_DB_USER: ${TXN_DB_USER}
       TXN_DB_PASSWORD: ${TXN_DB_PASSWORD}
       RABBITMQ_HOST: rabbitmq

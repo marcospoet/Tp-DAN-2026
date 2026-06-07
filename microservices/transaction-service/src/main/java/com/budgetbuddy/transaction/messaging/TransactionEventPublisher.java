@@ -1,10 +1,12 @@
 package com.budgetbuddy.transaction.messaging;
 
-import com.budgetbuddy.transaction.entity.Transaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Map;
 
@@ -15,7 +17,10 @@ public class TransactionEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    public void publishTransactionCreated(Transaction transaction) {
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onTransactionCreated(TransactionCreatedEvent event) {
+        var transaction = event.transaction();
         Map<String, Object> payload = Map.of(
                 "transactionId", transaction.getId().toString(),
                 "userId",        transaction.getUserId().toString(),

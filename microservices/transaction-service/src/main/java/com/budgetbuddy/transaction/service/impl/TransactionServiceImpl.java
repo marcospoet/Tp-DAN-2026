@@ -6,7 +6,8 @@ import com.budgetbuddy.transaction.dto.TransactionResponse;
 import com.budgetbuddy.transaction.dto.UpdateTransactionRequest;
 import com.budgetbuddy.transaction.entity.Transaction;
 import com.budgetbuddy.transaction.exception.TransactionNotFoundException;
-import com.budgetbuddy.transaction.messaging.TransactionEventPublisher;
+import com.budgetbuddy.transaction.messaging.TransactionCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import com.budgetbuddy.transaction.repository.TransactionRepository;
 import com.budgetbuddy.transaction.service.ExchangeRateService;
 import com.budgetbuddy.transaction.service.ITransactionService;
@@ -27,7 +28,7 @@ public class TransactionServiceImpl implements ITransactionService {
 
     private final TransactionRepository transactionRepository;
     private final ExchangeRateService exchangeRateService;
-    private final TransactionEventPublisher eventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -65,7 +66,7 @@ public class TransactionServiceImpl implements ITransactionService {
         }
 
         Transaction saved = transactionRepository.save(transaction);
-        eventPublisher.publishTransactionCreated(saved);
+        eventPublisher.publishEvent(new TransactionCreatedEvent(saved));
         return toResponse(saved);
     }
 
