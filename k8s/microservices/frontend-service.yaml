@@ -35,8 +35,6 @@ spec:
           env:
             - name: BACKEND_URL
               value: http://api-gateway:8080
-            - name: NEXT_PUBLIC_OAUTH_URL
-              value: https://api.pesito.dev
           readinessProbe:
             httpGet:
               path: /api/health

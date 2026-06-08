@@ -15,6 +15,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# NEXT_PUBLIC_* vars are baked at build time — pass via --build-arg in CI/CD
+ARG NEXT_PUBLIC_OAUTH_URL=https://api.pesito.dev
+ENV NEXT_PUBLIC_OAUTH_URL=${NEXT_PUBLIC_OAUTH_URL}
+
 RUN npm run build
 
 # Stage 3: Runtime (standalone output)
