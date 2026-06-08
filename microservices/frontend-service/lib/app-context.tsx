@@ -108,6 +108,7 @@ interface ProfileResponse {
   apiKeyOpenai?: string
   apiKeyGemini?: string
   defaultAccount?: string
+  defaultExRateType?: string
 }
 
 interface AppState {
@@ -159,6 +160,8 @@ interface AppState {
   setExchangeRateMode: (mode: ExchangeRateMode) => void
   preferredExchangeRateType: ExchangeRateType
   setPreferredExchangeRateType: (type: ExchangeRateType) => void
+  defaultExRateType: ExchangeRateType
+  setDefaultExRateType: (t: ExchangeRateType) => void
   saveProfile: (overrides?: {
     userName?: string
     defaultAccount?: string
@@ -168,6 +171,7 @@ interface AppState {
     apiKeyClaude?: string
     apiKeyOpenAI?: string
     apiKeyGemini?: string
+    defaultExRateType?: ExchangeRateType
   }) => Promise<void>
   // Filters
   timeFilter: TimeFilter
@@ -268,6 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPreferredExchangeRateTypeState(type)
     if (typeof window !== "undefined") localStorage.setItem("bb_preferred_rate_type", type)
   }
+  const [defaultExRateType, setDefaultExRateType] = useState<ExchangeRateType>("BLUE")
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("month")
   const [customRange, setCustomRange] = useState<{ from: Date; to: Date }>(() => {
@@ -331,6 +336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDefaultAccount(profile.defaultAccount ?? "Efectivo")
     setExchangeRateMode((profile.exchangeRateMode as ExchangeRateMode) ?? "api")
     setUsdRate(profile.usdRate ?? 1350)
+    setDefaultExRateType((profile.defaultExRateType as ExchangeRateType) ?? "BLUE")
     setAiProvider((profile.aiProvider as AIProvider) ?? "claude")
     setApiKeyClaude(profile.apiKeyClaude ?? "")
     setApiKeyOpenAI(profile.apiKeyOpenai ?? "")
@@ -420,6 +426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHasMoreTransactions(false)
     setIsLoadingHistory(false)
     historyCutoffRef.current = null
+    setDefaultExRateType("BLUE")
     setView("landing", true)
   }
 
@@ -555,6 +562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         apiKeyClaude: overrides?.apiKeyClaude ?? apiKeyClaude,
         apiKeyOpenai: overrides?.apiKeyOpenAI ?? apiKeyOpenAI,
         apiKeyGemini: overrides?.apiKeyGemini ?? apiKeyGemini,
+        defaultExRateType: overrides?.defaultExRateType ?? defaultExRateType,
       }),
     })
   }
@@ -599,6 +607,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExchangeRateMode,
     preferredExchangeRateType,
     setPreferredExchangeRateType,
+    defaultExRateType,
+    setDefaultExRateType,
     saveProfile,
     timeFilter,
     setTimeFilter,
@@ -608,7 +618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [user, loadingAuth, isPasswordRecovery, currentView, navDirection, transactions, isProcessing,
        isOnline, pendingOfflineCount, isLoadingHistory, hasMoreTransactions,
        aiProvider, apiKeyClaude, apiKeyOpenAI, apiKeyGemini, apiKey, userName,
-       defaultAccount, usdRate, exchangeRateMode, preferredExchangeRateType, timeFilter, customRange])
+       defaultAccount, usdRate, exchangeRateMode, preferredExchangeRateType, defaultExRateType, timeFilter, customRange])
 
   return (
     <AppContext.Provider value={contextValue}>

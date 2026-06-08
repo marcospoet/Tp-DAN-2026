@@ -96,6 +96,7 @@ export function DashboardPage() {
     isLoadingHistory,
     hasMoreTransactions,
     loadMoreTransactions,
+    defaultExRateType,
   } = useApp()
 
   // ── Magic Bar state ──────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ export function DashboardPage() {
   const [observation, setObservation] = useState("")
   const [showObservation, setShowObservation] = useState(false)
   const [newCurrency, setNewCurrency] = useState<"ARS" | "USD">("ARS")
-  const [newExRateType, setNewExRateType] = useState<ExchangeRateType>(() => preferredExchangeRateType === "MANUAL" ? "OFICIAL" : preferredExchangeRateType)
+  const [newExRateType, setNewExRateType] = useState<ExchangeRateType>(defaultExRateType)
   const [newManualRate, setNewManualRate] = useState("")
   const [newTxDate, setNewTxDate] = useState<Date | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -515,9 +516,13 @@ export function DashboardPage() {
 
       if (valid.length === 0) {
         if (audioAtt) {
-          // Audio was transcribed but AI couldn't detect a transaction
-          setAiError("No reconocí una transacción en el audio. Intentá ser más específico.")
-          setTimeout(() => setAiError(null), 5000)
+          // Audio was transcribed but AI couldn't detect a transaction —
+          // put the transcription back in the input so the user can see/correct it and resubmit.
+          setMagicInput(finalTextInput)
+          toast.info("No detecté un gasto en el audio", {
+            description: "Revisá el texto transcripto y reenvialo, o agregá más detalles.",
+            duration: 5000,
+          })
           return
         }
         const hasPdf = nonAudioAttachments.some(a => a.type === "file")

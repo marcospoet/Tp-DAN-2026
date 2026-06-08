@@ -56,6 +56,10 @@ public class Profile {
     @Builder.Default
     private String defaultAccount = "Efectivo";
 
+    @Column(name = "default_ex_rate_type", nullable = false)
+    @Builder.Default
+    private String defaultExRateType = "BLUE";
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

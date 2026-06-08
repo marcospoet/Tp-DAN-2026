@@ -106,6 +106,7 @@ public class AuthServiceImpl implements IAuthService {
         if (request.apiKeyOpenai() != null)     p.setApiKeyOpenai(request.apiKeyOpenai());
         if (request.apiKeyGemini() != null)     p.setApiKeyGemini(request.apiKeyGemini());
         if (request.defaultAccount() != null)   p.setDefaultAccount(request.defaultAccount());
+        if (request.defaultExRateType() != null) p.setDefaultExRateType(request.defaultExRateType());
 
         return toProfileResponse(user, p);
     }
@@ -146,7 +147,7 @@ public class AuthServiceImpl implements IAuthService {
             p.getProfileMode(), p.getExchangeRateMode(),
             p.getUsdRate(), p.getAiProvider(),
             p.getApiKeyClaude(), p.getApiKeyOpenai(), p.getApiKeyGemini(),
-            p.getDefaultAccount()
+            p.getDefaultAccount(), p.getDefaultExRateType()
         );
     }
 }

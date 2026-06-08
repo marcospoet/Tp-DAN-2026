@@ -783,6 +783,21 @@ export function LandingPage() {
               </TiltCard>
             </GlowCard>
 
+            {/* Voice — GlowCard */}
+            <GlowCard className="p-6 flex flex-col gap-4" glow="oklch(0.72 0.18 160 / 0.14)" delay={0.13}>
+              <TiltCard>
+                <div className="flex flex-col gap-4">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-400/10 flex items-center justify-center self-start">
+                    <Mic className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="relative z-10 text-foreground font-semibold mb-1.5">Dictado por voz</p>
+                    <p className="relative z-10 text-muted-foreground text-sm leading-relaxed">Grabá un audio y Pesito transcribe y registra el gasto automáticamente. Sin escribir nada.</p>
+                  </div>
+                </div>
+              </TiltCard>
+            </GlowCard>
+
             {/* Featured card 2 — TiltCard (col-span-2) */}
             <motion.div className="lg:col-span-2"
               initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
@@ -997,12 +1012,19 @@ export function LandingPage() {
             <PesitoLogo size="sm" />
             <span className="text-sm text-muted-foreground font-medium">Pesito</span>
           </div>
-          <a href="https://github.com/MarcosPiv" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer group">
-            Desarrollado por
-            <span className="font-medium text-foreground group-hover:text-primary transition-colors">Marcos Pividori</span>
-            <Github className="w-3.5 h-3.5" />
-          </a>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span>Desarrollado por</span>
+            <a href="https://github.com/MarcosPiv" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer group">
+              <span className="font-medium text-foreground group-hover:text-primary transition-colors">Marcos Pividori</span>
+              <Github className="w-3.5 h-3.5" />
+            </a>
+            <a href="https://github.com/marcospoet" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer group">
+              <span className="font-medium text-foreground group-hover:text-primary transition-colors">Marcos Poet</span>
+              <Github className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
       </footer>
 

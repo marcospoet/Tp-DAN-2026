@@ -15,5 +15,6 @@ public record ProfileResponse(
     String apiKeyClaude,
     String apiKeyOpenai,
     String apiKeyGemini,
-    String defaultAccount
+    String defaultAccount,
+    String defaultExRateType
 ) {}

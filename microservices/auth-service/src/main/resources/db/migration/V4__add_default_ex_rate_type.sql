@@ -1,0 +1,2 @@
+ALTER TABLE profiles
+    ADD COLUMN IF NOT EXISTS default_ex_rate_type VARCHAR(20) NOT NULL DEFAULT 'BLUE';

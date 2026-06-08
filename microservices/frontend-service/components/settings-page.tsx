@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useApp, type ExchangeRateMode, type AIProvider } from "@/lib/app-context"
+import { useApp, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/app-context"
 import { PAYMENT_ACCOUNTS, ACCOUNT_CATEGORIES } from "@/components/dashboard/shared"
 import { useBiometric } from "@/hooks/use-biometric"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
@@ -93,6 +93,8 @@ export function SettingsPage() {
     setPreferredExchangeRateType,
     defaultAccount,
     setDefaultAccount,
+    defaultExRateType,
+    setDefaultExRateType,
     saveProfile,
   } = useApp()
 
@@ -106,10 +108,15 @@ export function SettingsPage() {
   const [localExMode, setLocalExMode] = useState<ExchangeRateMode>(exchangeRateMode)
   const [localDefaultAccount, setLocalDefaultAccount] = useState(defaultAccount)
   const [defaultAccountOpen, setDefaultAccountOpen] = useState(false)
-  const [selectedApiKey, setSelectedApiKey] = useState<"blue" | "oficial" | "tarjeta" | "mep">(() => {
+  type AIRateKey = "blue" | "oficial" | "tarjeta" | "mep"
+  const initialApiKey = (defaultExRateType === "MANUAL" ? "blue" : defaultExRateType.toLowerCase()) as AIRateKey
+  const [selectedApiKey, setSelectedApiKey] = useState<AIRateKey>(() => {
     const t = preferredExchangeRateType.toLowerCase()
-    return (["blue", "oficial", "tarjeta", "mep"].includes(t) ? t : "blue") as "blue" | "oficial" | "tarjeta" | "mep"
+    return (["blue", "oficial", "tarjeta", "mep"].includes(t) ? t : initialApiKey) as AIRateKey
   })
+  const [localDefaultExRateType, setLocalDefaultExRateType] = useState<"BLUE" | "OFICIAL" | "TARJETA" | "MEP">(
+    (defaultExRateType === "MANUAL" ? "BLUE" : defaultExRateType) as "BLUE" | "OFICIAL" | "TARJETA" | "MEP"
+  )
   const [saved, setSaved] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
   const [exOpen, setExOpen] = useState(false)
@@ -204,6 +211,11 @@ export function SettingsPage() {
       if (active?.venta) newRate = active.venta
     }
 
+    // In API mode the default type matches the selected rate card
+    const finalDefaultExRateType: ExchangeRateType = localExMode === "api"
+      ? (selectedApiKey.toUpperCase() as ExchangeRateType)
+      : localDefaultExRateType
+
     // Update context state
     setAiProvider(localProvider)
     setApiKeyClaude(localKeysClaude)
@@ -213,6 +225,7 @@ export function SettingsPage() {
     setUsdRate(newRate)
     setPreferredExchangeRateType(localExMode === "api" ? (selectedApiKey.toUpperCase() as import("@/lib/app-context").ExchangeRateType) : "MANUAL")
     setDefaultAccount(localDefaultAccount)
+    setDefaultExRateType(finalDefaultExRateType)
 
     // Pass fresh values to avoid stale-closure bug
     await saveProfile({
@@ -223,6 +236,7 @@ export function SettingsPage() {
       exchangeRateMode: localExMode,
       usdRate: newRate,
       defaultAccount: localDefaultAccount,
+      defaultExRateType: finalDefaultExRateType,
     })
 
     setEditingKey(false)
@@ -413,6 +427,9 @@ export function SettingsPage() {
                   <span className="text-[10px] font-normal text-muted-foreground/70">
                     · {isApiMode ? "Automático" : `Manual · $${localUsdRate}`}
                   </span>
+                  <span className="text-[10px] font-semibold text-primary/80 bg-primary/10 rounded-full px-2 py-0.5">
+                    Predeterminado: {localDefaultExRateType === "TARJETA" ? "Tarjeta" : localDefaultExRateType === "OFICIAL" ? "Oficial" : localDefaultExRateType}
+                  </span>
                 </Label>
                 <motion.div
                   animate={{ rotate: exOpen ? 180 : 0 }}
@@ -517,6 +534,7 @@ export function SettingsPage() {
                                       onClick={() => {
                                         setSelectedApiKey(c.key)
                                         if (r?.venta) setLocalUsdRate(r.venta.toString())
+                                        setLocalDefaultExRateType(c.key.toUpperCase() as "BLUE" | "OFICIAL" | "TARJETA" | "MEP")
                                       }}
                                       className={`flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer ${
                                         isSelected
@@ -537,8 +555,8 @@ export function SettingsPage() {
                                           </span>
                                         )}
                                         {isSelected && (
-                                          <span className="text-[10px] font-semibold text-primary mt-0.5">
-                                            Por defecto
+                                          <span className="text-[9px] font-semibold text-primary uppercase tracking-wide mt-0.5">
+                                            Predeterminado
                                           </span>
                                         )}
                                       </div>
@@ -555,6 +573,11 @@ export function SettingsPage() {
                                 <span className="font-medium text-foreground">API de cotizaciones</span>
                                 {" "}· Los valores se actualizan automáticamente.
                               </p>
+                              <p className="text-[11px] text-muted-foreground/80 border-t border-border pt-2">
+                                La cotización seleccionada es también el{" "}
+                                <span className="font-medium text-foreground">tipo predeterminado</span>
+                                {" "}que usa Pesito cuando no especificás el tipo de dólar.
+                              </p>
                             </div>
                           </motion.div>
                         ) : (
@@ -567,7 +590,7 @@ export function SettingsPage() {
                             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                             className="overflow-hidden"
                           >
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-3">
                               <Input
                                 id="usdRate"
                                 type="number"
@@ -583,6 +606,29 @@ export function SettingsPage() {
                                 </span>
                                 . Ingresá tu cotización preferida.
                               </p>
+                              {/* Tipo predeterminado para IA en modo manual */}
+                              <div className="flex flex-col gap-2 border-t border-border pt-2">
+                                <Label className="text-xs text-muted-foreground">Tipo predeterminado para Pesito</Label>
+                                <div className="grid grid-cols-4 gap-1 rounded-xl bg-secondary/50 p-1 border border-border">
+                                  {(["BLUE", "TARJETA", "OFICIAL", "MEP"] as const).map((key) => (
+                                    <button
+                                      key={key}
+                                      type="button"
+                                      onClick={() => setLocalDefaultExRateType(key)}
+                                      className={`flex items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                                        localDefaultExRateType === key
+                                          ? "bg-primary text-primary-foreground shadow-sm"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      {key === "BLUE" ? "💵 Blue" : key === "TARJETA" ? "💳 Tarjeta" : key === "OFICIAL" ? "🏦 Oficial" : "📈 MEP"}
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground/80">
+                                  Cuando no especificás el tipo de dólar, Pesito usa este por defecto.
+                                </p>
+                              </div>
                             </div>
                           </motion.div>
                         )}
