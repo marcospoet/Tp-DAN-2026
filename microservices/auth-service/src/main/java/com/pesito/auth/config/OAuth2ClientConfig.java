@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.oauth2.core.provider.CommonOAuth2Provider;
+import org.springframework.security.oauth2.client.registration.CommonOAuth2Provider;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
