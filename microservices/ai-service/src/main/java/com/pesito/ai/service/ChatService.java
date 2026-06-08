@@ -1,18 +1,22 @@
-package com.budgetbuddy.ai.service;
+package com.pesito.ai.service;
 
-import com.budgetbuddy.ai.dto.ChatRequest;
-import com.budgetbuddy.ai.dto.ChatResponse;
-import com.budgetbuddy.ai.dto.ChatTurnDto;
-import com.budgetbuddy.ai.model.ChatMessage;
-import com.budgetbuddy.ai.model.ChatSession;
-import com.budgetbuddy.ai.repository.ChatSessionRepository;
+import com.pesito.ai.dto.ChatRequest;
+import com.pesito.ai.dto.ChatResponse;
+import com.pesito.ai.dto.ChatTurnDto;
+import com.pesito.ai.model.ChatMessage;
+import com.pesito.ai.model.ChatSession;
+import com.pesito.ai.repository.ChatSessionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 
+
+
 @Service
 public class ChatService {
+
+    private static final int MAX_SESSIONS_PER_USER = 10;
 
     private final ChatSessionRepository sessionRepo;
     private final AiProviderService aiProvider;
@@ -56,8 +60,16 @@ public class ChatService {
         session.addMessage(new ChatMessage("user", req.getMessage()));
         session.addMessage(new ChatMessage("assistant", reply));
         session = sessionRepo.save(session);
+        enforceSessionLimit(userId);
 
         return new ChatResponse(reply.trim(), session.getId());
+    }
+
+    private void enforceSessionLimit(String userId) {
+        List<ChatSession> sessions = sessionRepo.findByUserIdOrderByUpdatedAtDesc(userId);
+        if (sessions.size() > MAX_SESSIONS_PER_USER) {
+            sessionRepo.deleteAll(sessions.subList(MAX_SESSIONS_PER_USER, sessions.size()));
+        }
     }
 
     private List<ChatTurnDto> buildHistory(ChatRequest req, ChatSession session) {

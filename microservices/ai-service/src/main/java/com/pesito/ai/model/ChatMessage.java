@@ -1,4 +1,4 @@
-package com.budgetbuddy.ai.model;
+package com.pesito.ai.model;
 
 import java.time.LocalDateTime;
 

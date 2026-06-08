@@ -1,4 +1,4 @@
-package com.budgetbuddy.ai.dto;
+package com.pesito.ai.dto;
 
 import java.util.List;
 

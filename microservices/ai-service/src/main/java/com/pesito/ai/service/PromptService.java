@@ -1,4 +1,4 @@
-package com.budgetbuddy.ai.service;
+package com.pesito.ai.service;
 
 import org.springframework.stereotype.Service;
 

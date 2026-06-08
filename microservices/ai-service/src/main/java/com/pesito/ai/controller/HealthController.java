@@ -1,4 +1,4 @@
-package com.budgetbuddy.ai.controller;
+package com.pesito.ai.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

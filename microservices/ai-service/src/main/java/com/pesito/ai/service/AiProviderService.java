@@ -1,7 +1,7 @@
-package com.budgetbuddy.ai.service;
+package com.pesito.ai.service;
 
-import com.budgetbuddy.ai.config.AiProperties;
-import com.budgetbuddy.ai.dto.ChatTurnDto;
+import com.pesito.ai.config.AiProperties;
+import com.pesito.ai.dto.ChatTurnDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;

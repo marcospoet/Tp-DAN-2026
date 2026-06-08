@@ -6,8 +6,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.budgetbuddy</groupId>
-        <artifactId>budgetbuddy-microservices</artifactId>
+        <groupId>com.pesito</groupId>
+        <artifactId>pesito-microservices</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>

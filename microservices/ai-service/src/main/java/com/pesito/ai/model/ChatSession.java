@@ -1,4 +1,4 @@
-package com.budgetbuddy.ai.model;
+package com.pesito.ai.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;

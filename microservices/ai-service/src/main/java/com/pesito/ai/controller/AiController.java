@@ -1,14 +1,14 @@
-package com.budgetbuddy.ai.controller;
+package com.pesito.ai.controller;
 
-import com.budgetbuddy.ai.dto.ChatRequest;
-import com.budgetbuddy.ai.dto.ChatResponse;
-import com.budgetbuddy.ai.dto.DetectIntentRequest;
-import com.budgetbuddy.ai.dto.ParseRequest;
-import com.budgetbuddy.ai.dto.RawAiResponse;
-import com.budgetbuddy.ai.dto.TranscribeRequest;
-import com.budgetbuddy.ai.service.AiProviderService;
-import com.budgetbuddy.ai.service.ChatService;
-import com.budgetbuddy.ai.service.PromptService;
+import com.pesito.ai.dto.ChatRequest;
+import com.pesito.ai.dto.ChatResponse;
+import com.pesito.ai.dto.DetectIntentRequest;
+import com.pesito.ai.dto.ParseRequest;
+import com.pesito.ai.dto.RawAiResponse;
+import com.pesito.ai.dto.TranscribeRequest;
+import com.pesito.ai.service.AiProviderService;
+import com.pesito.ai.service.ChatService;
+import com.pesito.ai.service.PromptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;

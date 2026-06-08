@@ -29,5 +29,7 @@ db.createCollection('chat_messages');
 db.createCollection('analytics_cache');
 
 db.chat_sessions.createIndex({ userId: 1, updatedAt: -1 });
+// TTL: MongoDB borra automáticamente sesiones inactivas después de 30 días
+db.chat_sessions.createIndex({ updatedAt: 1 }, { expireAfterSeconds: 2592000 });
 db.chat_messages.createIndex({ sessionId: 1, createdAt: 1 });
 db.analytics_cache.createIndex({ userId: 1 }, { unique: true });
