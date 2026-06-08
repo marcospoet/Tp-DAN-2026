@@ -297,6 +297,8 @@ services:
     build:
       context: ./microservices/frontend-service
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_OAUTH_URL: http://localhost:8080
     container_name: bb-frontend
     environment:
       BACKEND_URL: http://api-gateway:8080
