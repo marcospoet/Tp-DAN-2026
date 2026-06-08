@@ -3,6 +3,7 @@ package com.pesito.auth.security.oauth2;
 import com.pesito.auth.entity.Profile;
 import com.pesito.auth.entity.User;
 import com.pesito.auth.messaging.UserRegisteredEvent;
+import com.pesito.auth.repository.ProfileRepository;
 import com.pesito.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -28,6 +29,7 @@ import java.util.Optional;
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final UserRepository userRepository;
+    private final ProfileRepository profileRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -96,7 +98,17 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private void processOAuthUser(String provider, OAuth2UserInfo userInfo) {
         // Buscar por provider_id primero (usuario OAuth que ya existe)
         Optional<User> byProvider = userRepository.findByProviderAndProviderId(provider, userInfo.getId());
-        if (byProvider.isPresent()) return;
+        if (byProvider.isPresent()) {
+            User existing = byProvider.get();
+            // Crear perfil si no existe (puede faltar por un intento de registro anterior fallido)
+            if (!profileRepository.existsById(existing.getId())) {
+                profileRepository.save(Profile.builder()
+                    .user(existing)
+                    .userName(userInfo.getName() != null ? userInfo.getName() : "Usuario")
+                    .build());
+            }
+            return;
+        }
 
         // Buscar por email (vincular OAuth a cuenta local existente)
         Optional<User> byEmail = userRepository.findByEmail(userInfo.getEmail());
@@ -116,13 +128,15 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             .emailVerified(true)
             .build();
 
+        userRepository.save(user);
+
+        // Guardar el perfil explicitamente — no depender del cascade en el lado inverso
         Profile profile = Profile.builder()
             .user(user)
             .userName(userInfo.getName() != null ? userInfo.getName() : "Usuario")
             .build();
 
-        user.setProfile(profile);
-        userRepository.save(user);
+        profileRepository.save(profile);
         eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail()));
     }
 }

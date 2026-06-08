@@ -37,8 +37,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const oauthUrl = process.env.NEXT_PUBLIC_OAUTH_URL || "http://localhost:8080"
+
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Inyección server-side del OAuth URL — evita el bug de Turbopack con NEXT_PUBLIC_* */}
+        <script dangerouslySetInnerHTML={{ __html: `window.__OAUTH_URL__=${JSON.stringify(oauthUrl)};` }} />
+      </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" storageKey="bb_theme" enableSystem={false}>
           <PwaRegister />
