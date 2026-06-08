@@ -25,6 +25,19 @@ public class User {
     @Builder.Default
     private String provider = "local";
 
+    @Column(name = "provider_id")
+    private String providerId;
+
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verification_token")
+    private String emailVerificationToken;
+
+    @Column(name = "email_verification_expiry")
+    private Instant emailVerificationExpiry;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

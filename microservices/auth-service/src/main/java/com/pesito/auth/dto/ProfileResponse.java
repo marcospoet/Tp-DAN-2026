@@ -16,5 +16,7 @@ public record ProfileResponse(
     String apiKeyOpenai,
     String apiKeyGemini,
     String defaultAccount,
-    String defaultExRateType
+    String defaultExRateType,
+    boolean emailVerified,
+    String provider
 ) {}

@@ -10,4 +10,6 @@ public interface IAuthService {
     ProfileResponse updateProfile(String email, UpdateProfileRequest request);
     void changePassword(String email, ChangePasswordRequest request);
     void deleteUser(String email);
+    void verifyEmail(String token);
+    void resendVerification(String email);
 }

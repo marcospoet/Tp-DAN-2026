@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useRef, useMemo, type ReactNode } from "react"
-import { apiRequest, getToken, removeToken, TOKEN_KEY } from "@/lib/api-client"
+import { apiRequest, getToken, removeToken, setToken, TOKEN_KEY } from "@/lib/api-client"
+import { toast } from "sonner"
 
 export type View = "landing" | "auth" | "settings" | "dashboard" | "profile" | "analytics"
 export type TimeFilter = "week" | "month" | "year" | "custom"
@@ -389,6 +390,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Auth init on mount ────────────────────────────────────────────────────────
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search)
+
+      // Captura token OAuth2 devuelto por el success handler del auth-service
+      const oauthToken = urlParams.get("oauth_token")
+      if (oauthToken) {
+        setToken(oauthToken)
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+
+      // Verifica email si hay un token de verificacion en la URL
+      const verifyToken = urlParams.get("verify_token")
+      if (verifyToken) {
+        window.history.replaceState({}, document.title, window.location.pathname)
+        apiRequest(`/api/auth/verify-email?token=${verifyToken}`)
+          .then(() => toast.success("¡Email verificado!", { description: "Tu cuenta está completamente activa." }))
+          .catch(() => toast.error("Enlace de verificación inválido o expirado."))
+      }
+    }
+
     const token = getToken()
     if (!token) {
       setLoadingAuth(false)

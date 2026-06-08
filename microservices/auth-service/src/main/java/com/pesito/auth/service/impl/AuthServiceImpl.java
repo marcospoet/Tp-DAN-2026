@@ -3,6 +3,7 @@ package com.pesito.auth.service.impl;
 import com.pesito.auth.dto.*;
 import com.pesito.auth.exception.EmailAlreadyRegisteredException;
 import com.pesito.auth.exception.UserNotFoundException;
+import com.pesito.auth.service.EmailVerificationService;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.pesito.auth.entity.Profile;
 import com.pesito.auth.entity.User;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.pesito.auth.messaging.UserDeletedEvent;
 import com.pesito.auth.messaging.UserRegisteredEvent;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,7 @@ public class AuthServiceImpl implements IAuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final ApplicationEventPublisher eventPublisher;
+    private final EmailVerificationService emailVerificationService;
 
     @Override
     @Transactional
@@ -38,10 +41,15 @@ public class AuthServiceImpl implements IAuthService {
             throw new EmailAlreadyRegisteredException(request.email());
         }
 
+        String verificationToken = UUID.randomUUID().toString();
+
         User user = User.builder()
             .email(request.email())
             .passwordHash(passwordEncoder.encode(request.password()))
             .provider("local")
+            .emailVerified(false)
+            .emailVerificationToken(verificationToken)
+            .emailVerificationExpiry(Instant.now().plusSeconds(86400))
             .build();
 
         Profile profile = Profile.builder()
@@ -53,6 +61,12 @@ public class AuthServiceImpl implements IAuthService {
         userRepository.save(user);
 
         eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail()));
+
+        try {
+            emailVerificationService.sendVerificationEmail(user.getEmail(), verificationToken);
+        } catch (Exception ignored) {
+            // El registro no falla si el mail no se puede enviar
+        }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getId());
         return new AuthResponse(token, user.getId(), user.getEmail());
@@ -85,8 +99,7 @@ public class AuthServiceImpl implements IAuthService {
     public ProfileResponse getProfile(String email) {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UserNotFoundException(email));
-        Profile p = user.getProfile();
-        return toProfileResponse(user, p);
+        return toProfileResponse(user);
     }
 
     @Override
@@ -96,19 +109,19 @@ public class AuthServiceImpl implements IAuthService {
             .orElseThrow(() -> new UserNotFoundException(email));
         Profile p = user.getProfile();
 
-        if (request.userName() != null)         p.setUserName(request.userName());
-        if (request.monthlyBudget() != null)    p.setMonthlyBudget(request.monthlyBudget());
-        if (request.profileMode() != null)      p.setProfileMode(request.profileMode());
-        if (request.exchangeRateMode() != null) p.setExchangeRateMode(request.exchangeRateMode());
-        if (request.usdRate() != null)          p.setUsdRate(request.usdRate());
-        if (request.aiProvider() != null)       p.setAiProvider(request.aiProvider());
-        if (request.apiKeyClaude() != null)     p.setApiKeyClaude(request.apiKeyClaude());
-        if (request.apiKeyOpenai() != null)     p.setApiKeyOpenai(request.apiKeyOpenai());
-        if (request.apiKeyGemini() != null)     p.setApiKeyGemini(request.apiKeyGemini());
-        if (request.defaultAccount() != null)   p.setDefaultAccount(request.defaultAccount());
+        if (request.userName() != null)          p.setUserName(request.userName());
+        if (request.monthlyBudget() != null)     p.setMonthlyBudget(request.monthlyBudget());
+        if (request.profileMode() != null)       p.setProfileMode(request.profileMode());
+        if (request.exchangeRateMode() != null)  p.setExchangeRateMode(request.exchangeRateMode());
+        if (request.usdRate() != null)           p.setUsdRate(request.usdRate());
+        if (request.aiProvider() != null)        p.setAiProvider(request.aiProvider());
+        if (request.apiKeyClaude() != null)      p.setApiKeyClaude(request.apiKeyClaude());
+        if (request.apiKeyOpenai() != null)      p.setApiKeyOpenai(request.apiKeyOpenai());
+        if (request.apiKeyGemini() != null)      p.setApiKeyGemini(request.apiKeyGemini());
+        if (request.defaultAccount() != null)    p.setDefaultAccount(request.defaultAccount());
         if (request.defaultExRateType() != null) p.setDefaultExRateType(request.defaultExRateType());
 
-        return toProfileResponse(user, p);
+        return toProfileResponse(user);
     }
 
     private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$";
@@ -140,14 +153,51 @@ public class AuthServiceImpl implements IAuthService {
         eventPublisher.publishEvent(new UserDeletedEvent(userId, email));
     }
 
-    private ProfileResponse toProfileResponse(User user, Profile p) {
+    @Override
+    @Transactional
+    public void verifyEmail(String token) {
+        User user = userRepository.findByEmailVerificationToken(token)
+            .orElseThrow(() -> new IllegalArgumentException("Token de verificación inválido."));
+
+        if (user.getEmailVerificationExpiry() == null ||
+            user.getEmailVerificationExpiry().isBefore(Instant.now())) {
+            throw new IllegalArgumentException("El token de verificación expiró.");
+        }
+
+        user.setEmailVerified(true);
+        user.setEmailVerificationToken(null);
+        user.setEmailVerificationExpiry(null);
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void resendVerification(String email) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserNotFoundException(email));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalStateException("El email ya está verificado.");
+        }
+
+        String token = UUID.randomUUID().toString();
+        user.setEmailVerificationToken(token);
+        user.setEmailVerificationExpiry(Instant.now().plusSeconds(86400));
+        userRepository.save(user);
+
+        emailVerificationService.sendVerificationEmail(email, token);
+    }
+
+    private ProfileResponse toProfileResponse(User user) {
+        Profile p = user.getProfile();
         return new ProfileResponse(
             user.getId(), user.getEmail(),
             p.getUserName(), p.getMonthlyBudget(),
             p.getProfileMode(), p.getExchangeRateMode(),
             p.getUsdRate(), p.getAiProvider(),
             p.getApiKeyClaude(), p.getApiKeyOpenai(), p.getApiKeyGemini(),
-            p.getDefaultAccount(), p.getDefaultExRateType()
+            p.getDefaultAccount(), p.getDefaultExRateType(),
+            user.isEmailVerified(), user.getProvider()
         );
     }
 }

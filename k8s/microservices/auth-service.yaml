@@ -67,6 +67,31 @@ spec:
               value: eureka-server
             - name: EUREKA_INSTANCE_PREFERIPADDRESS
               value: "true"
+            # OAuth2 — Google y GitHub
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: GOOGLE_CLIENT_SECRET
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: GITHUB_CLIENT_ID
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: GITHUB_CLIENT_SECRET
+            - name: OAUTH2_REDIRECT_BASE_URL
+              value: "https://api.pesito.dev"
+            - name: APP_FRONTEND_URL
+              value: "https://pesito.dev"
           readinessProbe:
             httpGet:
               path: /actuator/health
