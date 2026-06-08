@@ -2,7 +2,6 @@ package com.pesito.auth;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.security.oauth2.client.OAuth2ClientAutoConfiguration;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.scheduling.annotation.EnableAsync;
 
@@ -27,7 +26,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  *  5. Controlador: AuthController
  *  6. Publicador RabbitMQ: UserEventPublisher
  */
-@SpringBootApplication(exclude = {OAuth2ClientAutoConfiguration.class})
+@SpringBootApplication
 @EnableDiscoveryClient
 @EnableAsync
 public class AuthServiceApplication {
