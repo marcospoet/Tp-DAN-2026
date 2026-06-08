@@ -12,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   const { provider } = await params
-  const target = new URL(`${BACKEND_URL}/oauth2/authorize/${provider}`)
+  const target = new URL(`${BACKEND_URL}/oauth2/authorization/${provider}`)
 
   return new Promise<NextResponse>((resolve) => {
     const mod = target.protocol === "https:" ? https : http
