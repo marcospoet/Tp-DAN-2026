@@ -78,7 +78,7 @@ export function AuthPage() {
 
   const handleOAuth = (provider: "google" | "github") => {
     setOauthLoading(provider)
-    window.location.href = `/api/oauth2/authorize/${provider}`
+    window.location.href = `${process.env.NEXT_PUBLIC_OAUTH_URL}/oauth2/authorization/${provider}`
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
