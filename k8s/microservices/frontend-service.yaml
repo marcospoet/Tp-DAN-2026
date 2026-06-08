@@ -2,12 +2,12 @@
 # Frontend Service — Deployment + Service
 #
 # Construir imagen (desde la raíz del repo):
-#   eval $(minikube docker-env)
 #   docker build -f microservices/frontend-service/Dockerfile \
 #     -t pesito/frontend-service:latest ./microservices/frontend-service
 #
-# Tipo NodePort: el browser necesita acceso externo al cluster.
-# Acceder con: minikube service frontend-service -n pesito
+# Tráfico externo entra por Traefik Ingress → pesito.dev
+# El browser llama /api/* → Next.js proxy (server-side) → http://api-gateway:8080
+# El browser nunca habla directo a la API.
 # ============================================================
 
 ---
@@ -51,8 +51,6 @@ spec:
               cpu: "500m"
 
 ---
-# NodePort: accesible desde el browser fuera del cluster Minikube.
-# nodePort: 30300 → http://<minikube-ip>:30300
 apiVersion: v1
 kind: Service
 metadata:
@@ -64,5 +62,4 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
-      nodePort: 30300
-  type: NodePort
+  type: ClusterIP
