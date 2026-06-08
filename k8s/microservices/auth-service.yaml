@@ -65,6 +65,8 @@ spec:
                   key: RABBITMQ_PASSWORD
             - name: EUREKA_HOST
               value: eureka-server
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              value: "true"
           readinessProbe:
             httpGet:
               path: /actuator/health

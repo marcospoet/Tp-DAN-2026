@@ -60,6 +60,8 @@ spec:
                   key: RABBITMQ_PASSWORD
             - name: EUREKA_HOST
               value: eureka-server
+            - name: EUREKA_INSTANCE_PREFERIPADDRESS
+              value: "true"
             - name: MINIO_HOST
               value: minio
             - name: MINIO_ACCESS_KEY
