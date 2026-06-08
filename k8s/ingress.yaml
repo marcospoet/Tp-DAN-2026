@@ -1,30 +1,48 @@
+# ============================================================
+# Ingress — subdomain routing para pesito.dev
+#
+# DNS A records requeridos en name.com (todos → 100.25.125.64):
+#   @          pesito.dev
+#   www        www.pesito.dev
+#   api        api.pesito.dev
+#   grafana    grafana.pesito.dev
+#   minio      minio.pesito.dev
+#   rabbitmq   rabbitmq.pesito.dev
+#   eureka     eureka.pesito.dev
+#   oauth       oauth.pesito.dev
+#
+# Cuatro Ingress separados para aplicar middlewares distintos por grupo:
+#   pesito-ingress-frontend  → rate-frontend              (300 req/min)
+#   pesito-ingress-api       → rate-api                   (100 req/min)
+#   pesito-ingress-oauth     → rate-api     (sin ForwardAuth — evita loop)
+#   pesito-ingress-admin     → oauth-forwardauth + rate-admin (SSO + 30 req/min)
+#
+# TLS: cert-manager emite un certificado SAN por grupo vía HTTP-01.
+# ============================================================
+
+# ── FRONTEND ─────────────────────────────────────────────────────────────────
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: pesito-ingress
+  name: pesito-ingress-frontend
   namespace: pesito
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: pesito-rate-frontend@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
     - hosts:
         - pesito.dev
         - www.pesito.dev
-      secretName: pesito-tls
+      secretName: pesito-tls-frontend
   rules:
     - host: pesito.dev
       http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: api-gateway
-                port:
-                  number: 8080
           - path: /
             pathType: Prefix
             backend:
@@ -35,13 +53,6 @@ spec:
     - host: www.pesito.dev
       http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: api-gateway
-                port:
-                  number: 8080
           - path: /
             pathType: Prefix
             backend:
@@ -49,3 +60,128 @@ spec:
                 name: frontend-service
                 port:
                   number: 3000
+
+# ── API GATEWAY ───────────────────────────────────────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pesito-ingress-api
+  namespace: pesito
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: pesito-rate-api@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - api.pesito.dev
+      secretName: pesito-tls-api
+  rules:
+    - host: api.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+
+# ── OAUTH2-PROXY (callback de Google — sin ForwardAuth para evitar loop) ──────
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pesito-ingress-oauth
+  namespace: pesito
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: pesito-rate-api@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - oauth.pesito.dev
+      secretName: pesito-tls-oauth
+  rules:
+    - host: oauth.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth2-proxy
+                port:
+                  number: 4180
+
+# ── ADMIN PANELS (protegidos con SSO Google) ───────────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pesito-ingress-admin
+  namespace: pesito
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # ForwardAuth primero (SSO), luego rate limit — orden izquierda a derecha
+    traefik.ingress.kubernetes.io/router.middlewares: pesito-oauth-forwardauth@kubernetescrd,pesito-rate-admin@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - grafana.pesito.dev
+        - minio.pesito.dev
+        - rabbitmq.pesito.dev
+        - eureka.pesito.dev
+      secretName: pesito-tls-admin
+
+  rules:
+    - host: grafana.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+    - host: minio.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001
+    - host: rabbitmq.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq
+                port:
+                  number: 15672
+    - host: eureka.pesito.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: eureka-server
+                port:
+                  number: 8761

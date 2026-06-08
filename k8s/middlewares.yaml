@@ -1,0 +1,77 @@
+# ============================================================
+# Traefik Middlewares — Rate Limiting por IP
+#
+# Política:
+#   rate-frontend : pesito.dev / www           300 req/min  burst 100
+#   rate-api      : api.pesito.dev             100 req/min  burst 50
+#   rate-admin    : grafana / minio / rabbitmq / eureka
+#                                               30 req/min  burst 10
+#
+# Referenciados desde ingress.yaml vía annotation:
+#   traefik.ingress.kubernetes.io/router.middlewares
+# ============================================================
+
+---
+# Frontend — Next.js carga múltiples chunks/assets por navegación
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-frontend
+  namespace: pesito
+spec:
+  rateLimit:
+    average: 300
+    burst: 100
+    period: 1m
+    sourceCriterion:
+      ipStrategy:
+        depth: 1   # usa la IP real del cliente (X-Forwarded-For[0])
+
+---
+# API — tráfico programático normal
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-api
+  namespace: pesito
+spec:
+  rateLimit:
+    average: 100
+    burst: 50
+    period: 1m
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+
+---
+# Admin panels — Grafana, MinIO, RabbitMQ, Eureka
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-admin
+  namespace: pesito
+spec:
+  rateLimit:
+    average: 30
+    burst: 10
+    period: 1m
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+
+---
+# SSO para paneles admin — delega auth a oauth2-proxy (Google OAuth)
+# Traefik llama /oauth2/auth antes de cada request a los paneles.
+# 200 → deja pasar | 401 → redirige a Google login
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: oauth-forwardauth
+  namespace: pesito
+spec:
+  forwardAuth:
+    address: http://oauth2-proxy:4180/oauth2/auth
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-Auth-Request-User
+      - X-Auth-Request-Email
