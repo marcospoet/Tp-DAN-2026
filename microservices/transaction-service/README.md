@@ -76,7 +76,7 @@ spring.application.name=transaction-service
 
 # PostgreSQL — schema: txn
 # txn_user solo tiene acceso al schema txn, no al schema auth
-spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:budgetbuddy}
+spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}
 spring.datasource.username=${TXN_DB_USER:txn_user}
 spring.datasource.password=${TXN_DB_PASSWORD:txn_pass}
 spring.datasource.driver-class-name=org.postgresql.Driver

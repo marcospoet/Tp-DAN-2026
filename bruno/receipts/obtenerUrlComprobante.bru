@@ -1,0 +1,38 @@
+meta {
+  name: obtenerUrlComprobante
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://localhost:8082/api/transactions/{{txnId}}/receipt/url
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const body = res.body;
+  test("retorna url del comprobante", function() {
+    expect(body).to.have.property("url");
+  });
+  test("URL es un string no vacío", function() {
+    expect(body.url).to.be.a("string").and.not.empty;
+  });
+  test("URL apunta a MinIO (presigned url)", function() {
+    expect(body.url).to.include("localhost");
+  });
+}
+
+settings {
+  encodeUrl: false
+  timeout: 5000
+}

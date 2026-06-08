@@ -1,5 +1,5 @@
 # ============================================================
-# Dockerfile — BudgetBuddy Frontend (Next.js)
+# Dockerfile — Pesito Frontend (Next.js)
 # Build context: ./microservices/frontend-service
 # ============================================================
 

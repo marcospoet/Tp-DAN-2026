@@ -1,0 +1,55 @@
+meta {
+  name: crearGastoConDolarTarjeta
+  type: http
+  seq: 11
+}
+
+post {
+  url: http://localhost:8082/api/transactions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "description": "Compra en Amazon (tarjeta de crédito)",
+    "amount": 45000.00,
+    "type": "expense",
+    "icon": "credit-card",
+    "category": "tecnología",
+    "date": "2026-06-06",
+    "currency": "ARS",
+    "exchangeRateType": "tarjeta",
+    "account": "Crédito",
+    "observation": "Dólar tarjeta incluye impuesto PAIS y percepción AFIP",
+    "isRecurring": false
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.type: eq expense
+  res.body.exchangeRateType: eq tarjeta
+}
+
+script:post-response {
+  const body = res.body;
+  test("amountUsd calculado con dólar tarjeta (más caro que oficial)", function() {
+    expect(body.amountUsd).to.be.greaterThan(0);
+  });
+  test("txRate guardado para auditoría futura", function() {
+    expect(body.txRate).to.be.greaterThan(0);
+  });
+  bru.setEnvVar("txnId", body.id);
+}
+
+settings {
+  encodeUrl: false
+  timeout: 8000
+}

@@ -1,0 +1,25 @@
+meta {
+  name: eliminarComprobante
+  type: http
+  seq: 3
+}
+
+delete {
+  url: http://localhost:8082/api/transactions/{{txnId}}/receipt
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+settings {
+  encodeUrl: false
+  timeout: 5000
+}

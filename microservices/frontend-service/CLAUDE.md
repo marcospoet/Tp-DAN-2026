@@ -15,7 +15,7 @@ No test suite is configured.
 
 ## Architecture
 
-**BudgetBuddy** is an AI-powered expense tracker built with Next.js App Router, targeting the Argentine market (ARS/USD multi-currency). It runs as a microservice inside the TP DAN 2026 stack — no Supabase, no direct backend calls from the browser.
+**Pesito** is an AI-powered expense tracker built with Next.js App Router, targeting the Argentine market (ARS/USD multi-currency). It runs as a microservice inside the TP DAN 2026 stack — no direct backend calls from the browser.
 
 ### Proxy Pattern
 
@@ -44,7 +44,7 @@ BACKEND_URL=http://localhost:8080
 
 ### Auth
 
-JWT-based authentication against `auth-service` (via API Gateway). Tokens are stored in `localStorage` under key `bb_jwt` and sent as `Authorization: Bearer <token>` by `lib/api-client.ts`. No Supabase involved.
+JWT-based authentication against `auth-service` (via API Gateway). Tokens are stored in `localStorage` under key `bb_jwt` and sent as `Authorization: Bearer <token>` by `lib/api-client.ts`.
 
 ### Navigation & State
 

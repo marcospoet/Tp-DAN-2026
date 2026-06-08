@@ -1,0 +1,26 @@
+meta {
+  name: getRateTipoInvalido
+  type: http
+  seq: 6
+}
+
+get {
+  url: http://localhost:8082/api/rates/cripto
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("retorna error cuando el tipo no existe", function() {
+    expect(res.status).to.be.oneOf([404, 500, 503]);
+  });
+}
+
+settings {
+  encodeUrl: false
+  timeout: 8000
+}

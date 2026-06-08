@@ -275,7 +275,7 @@ docker compose up --build
 Para borrar solo un usuario específico (sin perder el resto):
 
 ```bash
-docker exec -it bb-postgres psql -U postgres -d budgetbuddy \
+docker exec -it bb-postgres psql -U postgres -d pesito \
   -c "DELETE FROM auth.users WHERE email = 'test@pesito.com';"
 ```
 
@@ -692,7 +692,7 @@ El volumen `postgres_data` ya existía de un run anterior y el `init.sh` solo co
 Opción A — sin perder datos (crear los roles manualmente):
 
 ```bash
-docker exec bb-postgres psql -U postgres -d budgetbuddy -c "
+docker exec bb-postgres psql -U postgres -d pesito -c "
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS txn;
 CREATE ROLE auth_user WITH LOGIN PASSWORD '<AUTH_DB_PASSWORD del .env>';

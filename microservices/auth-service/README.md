@@ -67,7 +67,7 @@ server.port=8081
 spring.application.name=auth-service
 
 # PostgreSQL — schema: auth
-spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:budgetbuddy}
+spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}
 spring.datasource.username=${AUTH_DB_USER:auth_user}
 spring.datasource.password=${AUTH_DB_PASSWORD:auth_pass}
 spring.datasource.driver-class-name=org.postgresql.Driver
@@ -193,4 +193,4 @@ V4__create_oauth_table.sql    → CREATE TABLE auth.oauth_connections
 La lógica que migra a este servicio viene de:
 - `lib/app-context.tsx` → funciones: `signIn()`, `signUp()`, `signOut()`, `resetPasswordForEmail()`, `loadProfile()`, `saveProfile()`
 - Modelo: `Profile` interface en `lib/app-context.tsx`
-- Supabase Auth → reemplazado por Spring Security + JWT propio
+- Spring Security + JWT propio

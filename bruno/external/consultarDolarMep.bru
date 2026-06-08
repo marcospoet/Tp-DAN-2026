@@ -1,0 +1,32 @@
+meta {
+  name: consultarDolarMep
+  type: http
+  seq: 5
+}
+
+get {
+  url: https://dolarapi.com/v1/dolares/bolsa
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.casa: eq bolsa
+}
+
+script:post-response {
+  const r = res.body;
+  test("tiene precio de compra y venta", function() {
+    expect(r.compra).to.be.greaterThan(0);
+    expect(r.venta).to.be.greaterThan(0);
+  });
+  test("DolarAPI devuelve 'bolsa'; nuestro servicio lo normaliza a 'mep'", function() {
+    expect(r.casa).to.equal("bolsa");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 5000
+}

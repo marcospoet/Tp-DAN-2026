@@ -1,0 +1,42 @@
+meta {
+  name: subirComprobante
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:8082/api/transactions/{{txnId}}/receipt
+  body: multipartForm
+  auth: inherit
+}
+
+headers {
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+body:multipart {
+  file: @file(/ruta/al/comprobante.jpg)
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  const body = res.body;
+  test("respuesta tiene id del receipt", function() {
+    expect(body).to.have.property("id");
+  });
+  test("transactionId coincide con el enviado", function() {
+    expect(body.transactionId).to.equal(bru.getEnvVar("txnId"));
+  });
+  test("tiene campo uploadedAt", function() {
+    expect(body).to.have.property("uploadedAt");
+  });
+}
+
+settings {
+  encodeUrl: false
+  timeout: 15000
+}

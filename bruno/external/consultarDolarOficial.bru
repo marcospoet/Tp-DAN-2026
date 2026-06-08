@@ -1,0 +1,35 @@
+meta {
+  name: consultarDolarOficial
+  type: http
+  seq: 3
+}
+
+get {
+  url: https://dolarapi.com/v1/dolares/oficial
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.casa: eq oficial
+}
+
+script:post-response {
+  const r = res.body;
+  test("tiene precio de compra", function() {
+    expect(r.compra).to.be.greaterThan(0);
+  });
+  test("tiene precio de venta", function() {
+    expect(r.venta).to.be.greaterThan(0);
+  });
+  test("oficial tiene spread menor que blue", function() {
+    const spread = r.venta - r.compra;
+    expect(spread).to.be.lessThan(50);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 5000
+}

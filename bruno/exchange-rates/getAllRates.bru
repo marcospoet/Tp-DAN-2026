@@ -1,0 +1,41 @@
+meta {
+  name: getAllRates
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:8082/api/rates
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const rates = res.body;
+  test("responde con array", function() {
+    expect(Array.isArray(rates)).to.be.true;
+  });
+  test("tiene al menos un tipo", function() {
+    expect(rates.length).to.be.greaterThan(0);
+  });
+  test("cada cotización tiene type, buyPrice, sellPrice", function() {
+    rates.forEach(r => {
+      expect(r).to.have.property("type");
+      expect(r).to.have.property("buyPrice");
+      expect(r).to.have.property("sellPrice");
+    });
+  });
+}
+
+settings {
+  encodeUrl: false
+  timeout: 8000
+}

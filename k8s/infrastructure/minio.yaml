@@ -7,7 +7,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: minio-pvc
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -19,7 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: minio
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   replicas: 1
   strategy:
@@ -76,7 +76,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   selector:
     app: minio

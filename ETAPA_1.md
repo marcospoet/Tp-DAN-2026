@@ -1,4 +1,4 @@
-# Entrega Etapa 1 — BudgetBuddy
+# Entrega Etapa 1 — Pesito
 **Materia:** Desarrollo de Aplicaciones en la Nube — UTN FRSF 2026  
 **Fecha de entrega:** 27 de mayo de 2026  
 **Integrante:** Marcos Joaquin Poët y Marcos Joaquin Pividori
@@ -9,10 +9,10 @@
 
 ### Idea general de la aplicación
 
-**BudgetBuddy** es una aplicación web de gestión de finanzas personales. Permite a los usuarios registrar, categorizar y analizar sus ingresos y egresos diarios, con soporte para múltiples monedas (ARS/USD), almacenamiento de comprobantes digitales y un asistente de inteligencia artificial que responde preguntas sobre el estado financiero del usuario.
+**Pesito** es una aplicación web de gestión de finanzas personales. Permite a los usuarios registrar, categorizar y analizar sus ingresos y egresos diarios, con soporte para múltiples monedas (ARS/USD), almacenamiento de comprobantes digitales y un asistente de inteligencia artificial que responde preguntas sobre el estado financiero del usuario.
 
 **Problema que resuelve:**  
-La mayoría de las personas no lleva un registro ordenado de sus gastos. Las planillas manuales son propensas a errores, los bancos no consolidan información entre billeteras y aplicaciones, y no existe retroalimentación inteligente sobre los hábitos de consumo. BudgetBuddy centraliza el registro financiero y agrega valor a través de la categorización automática, la conversión de moneda en tiempo real y el análisis por IA.
+La mayoría de las personas no lleva un registro ordenado de sus gastos. Las planillas manuales son propensas a errores, los bancos no consolidan información entre billeteras y aplicaciones, y no existe retroalimentación inteligente sobre los hábitos de consumo. Pesito centraliza el registro financiero y agrega valor a través de la categorización automática, la conversión de moneda en tiempo real y el análisis por IA.
 
 ---
 
@@ -145,7 +145,7 @@ La aplicación podría abarcar funcionalidades como presupuestos por categoría,
 ```
 ┌─────────────────────────────────────────────┐
 │                                             │
-│              💰 BudgetBuddy                 │
+│              💰 Pesito                 │
 │        Tu control financiero personal       │
 │                                             │
 │  ┌─────────────────────────────────────┐   │
@@ -177,7 +177,7 @@ La aplicación podría abarcar funcionalidades como presupuestos por categoría,
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  💰 BudgetBuddy        Hola, Marcos          [⚙ Perfil] [Salir] │
+│  💰 Pesito        Hola, Marcos          [⚙ Perfil] [Salir] │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
@@ -217,7 +217,7 @@ La aplicación podría abarcar funcionalidades como presupuestos por categoría,
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  💰 BudgetBuddy                                  [+ Nueva]       │
+│  💰 Pesito                                  [+ Nueva]       │
 ├──────────────────────────────────────────────────────────────────┤
 │  Transacciones                                                   │
 │                                                                  │
@@ -345,7 +345,7 @@ La aplicación podría abarcar funcionalidades como presupuestos por categoría,
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  💰 BudgetBuddy  >  Mis cuentas                   [+ Nueva]     │
+│  💰 Pesito  >  Mis cuentas                   [+ Nueva]     │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │

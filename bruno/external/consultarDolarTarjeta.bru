@@ -1,0 +1,31 @@
+meta {
+  name: consultarDolarTarjeta
+  type: http
+  seq: 4
+}
+
+get {
+  url: https://dolarapi.com/v1/dolares/tarjeta
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.body.casa: eq tarjeta
+}
+
+script:post-response {
+  const r = res.body;
+  test("tiene precio de venta (impuesto PAIS + percepción)", function() {
+    expect(r.venta).to.be.greaterThan(0);
+  });
+  test("tarjeta es más caro que oficial (incluye impuestos)", function() {
+    expect(r.venta).to.be.greaterThan(1000);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 5000
+}

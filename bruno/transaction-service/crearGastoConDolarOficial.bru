@@ -1,0 +1,54 @@
+meta {
+  name: crearGastoConDolarOficial
+  type: http
+  seq: 10
+}
+
+post {
+  url: http://localhost:8082/api/transactions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "description": "Suscripción Netflix (débito banco)",
+    "amount": 8500.00,
+    "type": "expense",
+    "icon": "tv",
+    "category": "entretenimiento",
+    "date": "2026-06-06",
+    "currency": "ARS",
+    "exchangeRateType": "oficial",
+    "account": "Débito",
+    "isRecurring": false
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.type: eq expense
+  res.body.exchangeRateType: eq oficial
+}
+
+script:post-response {
+  const body = res.body;
+  test("amountUsd calculado con cotización oficial", function() {
+    expect(body.amountUsd).to.be.greaterThan(0);
+  });
+  test("txRate coincide con cotización oficial vigente", function() {
+    expect(body.txRate).to.be.greaterThan(0);
+  });
+  bru.setEnvVar("txnId", body.id);
+}
+
+settings {
+  encodeUrl: false
+  timeout: 8000
+}

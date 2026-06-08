@@ -1,0 +1,114 @@
+package com.pesito.transaction.service;
+
+import com.pesito.transaction.dto.ExchangeRateResponse;
+import com.pesito.transaction.exception.ExchangeRateException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ExchangeRateService {
+
+    private static final String DOLAR_API = "dolar-api";
+
+    private final WebClient dolarApiClient;
+
+    /**
+     * DTO interno para deserializar la respuesta de DolarAPI.
+     * Los nombres coinciden con los campos JSON de la API.
+     * ignoreUnknown = true porque la API también devuelve "moneda" y "nombre".
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record DolarApiRate(
+            String casa,
+            BigDecimal compra,
+            BigDecimal venta,
+            String fechaActualizacion
+    ) {}
+
+    /**
+     * Obtiene todas las cotizaciones del dólar (blue, oficial, tarjeta, mep, etc.)
+     */
+    @Cacheable("exchange-rates")
+    @CircuitBreaker(name = DOLAR_API, fallbackMethod = "getAllRatesFallback")
+    @Retry(name = DOLAR_API)
+    public List<ExchangeRateResponse> getAllRates() {
+        List<DolarApiRate> rates = dolarApiClient.get()
+                .uri("/dolares")
+                .retrieve()
+                .bodyToFlux(DolarApiRate.class)
+                .collectList()
+                .block();
+
+        if (rates == null || rates.isEmpty()) {
+            throw new ExchangeRateException("No se pudieron obtener las cotizaciones de DolarAPI");
+        }
+
+        return rates.stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @CacheEvict("exchange-rates")
+    public void evictRatesCache() {
+        log.info("Caché de cotizaciones invalidada manualmente");
+    }
+
+    private List<ExchangeRateResponse> getAllRatesFallback(Exception e) {
+        log.error("DolarAPI no disponible (circuit breaker abierto o reintentos agotados): {}", e.getMessage());
+        throw new ExchangeRateException("DolarAPI no disponible temporalmente. Intente nuevamente en unos minutos.");
+    }
+
+    /**
+     * Obtiene la cotización de un tipo específico (blue, oficial, tarjeta, mep).
+     */
+    public ExchangeRateResponse getRate(String type) {
+        return getAllRates().stream()
+                .filter(r -> r.type().equalsIgnoreCase(type))
+                .findFirst()
+                .orElseThrow(() -> new ExchangeRateException("Cotización no encontrada: " + type));
+    }
+
+    /**
+     * Convierte un monto en ARS a USD usando el precio de venta de la cotización indicada.
+     * Devuelve el monto en USD redondeado a 2 decimales.
+     */
+    public BigDecimal convertArsToUsd(BigDecimal amountArs, String exchangeRateType) {
+        ExchangeRateResponse rate = getRate(exchangeRateType);
+        if (rate.sellPrice().compareTo(BigDecimal.ZERO) == 0) {
+            throw new ExchangeRateException("Precio de venta es 0 para: " + exchangeRateType);
+        }
+        return amountArs.divide(rate.sellPrice(), 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Devuelve el precio de venta (cotización) del tipo indicado.
+     * Se guarda como tx_rate en la transacción.
+     */
+    public BigDecimal getSellRate(String exchangeRateType) {
+        return getRate(exchangeRateType).sellPrice();
+    }
+
+    private ExchangeRateResponse toResponse(DolarApiRate rate) {
+        // DolarAPI usa "bolsa" para el dólar MEP; normalizamos al nombre que usa el frontend.
+        String type = "bolsa".equalsIgnoreCase(rate.casa()) ? "mep" : rate.casa().toLowerCase();
+        return new ExchangeRateResponse(
+                type,
+                rate.compra(),
+                rate.venta(),
+                rate.fechaActualizacion()
+        );
+    }
+}

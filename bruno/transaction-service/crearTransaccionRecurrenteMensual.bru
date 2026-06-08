@@ -1,0 +1,48 @@
+meta {
+  name: crearTransaccionRecurrenteMensual
+  type: http
+  seq: 15
+}
+
+post {
+  url: http://localhost:8082/api/transactions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  X-User-Id: {{userId}}
+  Authorization: Bearer {{token}}
+}
+
+body:json {
+  {
+    "description": "Alquiler departamento",
+    "amount": 320000.00,
+    "type": "expense",
+    "icon": "home",
+    "category": "vivienda",
+    "date": "2026-06-01",
+    "currency": "ARS",
+    "exchangeRateType": "oficial",
+    "account": "Transferencia",
+    "isRecurring": true,
+    "recurringFrequency": "monthly"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.isRecurring: eq true
+  res.body.recurringFrequency: eq monthly
+}
+
+script:post-response {
+  bru.setEnvVar("txnId", res.body.id);
+}
+
+settings {
+  encodeUrl: false
+  timeout: 8000
+}

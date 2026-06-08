@@ -89,6 +89,8 @@ export function SettingsPage() {
     setUsdRate,
     exchangeRateMode,
     setExchangeRateMode,
+    preferredExchangeRateType,
+    setPreferredExchangeRateType,
     defaultAccount,
     setDefaultAccount,
     saveProfile,
@@ -104,7 +106,10 @@ export function SettingsPage() {
   const [localExMode, setLocalExMode] = useState<ExchangeRateMode>(exchangeRateMode)
   const [localDefaultAccount, setLocalDefaultAccount] = useState(defaultAccount)
   const [defaultAccountOpen, setDefaultAccountOpen] = useState(false)
-  const [selectedApiKey, setSelectedApiKey] = useState<"blue" | "oficial" | "tarjeta" | "mep">("blue")
+  const [selectedApiKey, setSelectedApiKey] = useState<"blue" | "oficial" | "tarjeta" | "mep">(() => {
+    const t = preferredExchangeRateType.toLowerCase()
+    return (["blue", "oficial", "tarjeta", "mep"].includes(t) ? t : "blue") as "blue" | "oficial" | "tarjeta" | "mep"
+  })
   const [saved, setSaved] = useState(false)
   const [keyError, setKeyError] = useState<string | null>(null)
   const [exOpen, setExOpen] = useState(false)
@@ -206,6 +211,7 @@ export function SettingsPage() {
     setApiKeyGemini(localKeysGemini)
     setExchangeRateMode(localExMode)
     setUsdRate(newRate)
+    setPreferredExchangeRateType(localExMode === "api" ? (selectedApiKey.toUpperCase() as import("@/lib/app-context").ExchangeRateType) : "MANUAL")
     setDefaultAccount(localDefaultAccount)
 
     // Pass fresh values to avoid stale-closure bug
@@ -530,6 +536,11 @@ export function SettingsPage() {
                                             C: {fmt(r.compra)}
                                           </span>
                                         )}
+                                        {isSelected && (
+                                          <span className="text-[10px] font-semibold text-primary mt-0.5">
+                                            Por defecto
+                                          </span>
+                                        )}
                                       </div>
                                       {isSelected && (
                                         <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
@@ -709,7 +720,7 @@ export function SettingsPage() {
             <div className="flex items-start gap-3 rounded-xl bg-secondary/50 p-4 border border-border">
               <ShieldCheck className="w-5 h-5 text-primary mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Tus claves se almacenan en tu cuenta de Supabase, cifradas en reposo.
+                Tus claves se almacenan de forma segura en el servidor, cifradas en reposo.
               </p>
             </div>
 

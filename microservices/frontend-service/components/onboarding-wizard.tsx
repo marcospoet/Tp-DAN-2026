@@ -25,10 +25,13 @@ const AI_PROVIDERS: Array<{ id: AIProvider; label: string; model: string; Icon: 
 export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const {
     userName,
+    apiKeyClaude, apiKeyOpenAI, apiKeyGemini,
     setAiProvider,
     setApiKeyClaude, setApiKeyOpenAI, setApiKeyGemini,
     saveProfile,
   } = useApp()
+
+  const hasExistingKey = !!(apiKeyClaude || apiKeyOpenAI || apiKeyGemini)
 
   const [step, setStep] = useState(0)
   const TOTAL_STEPS = 2
@@ -42,7 +45,13 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const keyIsValid = localKey.startsWith(prefix) && localKey.length > prefix.length + 8
   const keyIsWrong = localKey.length > 3 && !localKey.startsWith(prefix)
 
-  const handleNext = () => setStep(s => s + 1)
+  const handleNext = () => {
+    if (hasExistingKey) {
+      finish(false)
+    } else {
+      setStep(s => s + 1)
+    }
+  }
 
   const finish = async (withAI: boolean) => {
     const aiOverrides: Parameters<typeof saveProfile>[0] = {}

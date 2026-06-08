@@ -1,4 +1,4 @@
-# BudgetBuddy — Interface Design System
+# Pesito — Interface Design System
 
 ## Direction & Feel
 **"Personal financial terminal"** — focused, dark, precise. Not a bank app (cold institutional), not social (playful). Like a trusted notebook that understands Argentine financial reality. The user is on their phone between tasks; speed of capture is the core value.

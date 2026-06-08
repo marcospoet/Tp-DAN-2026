@@ -157,6 +157,8 @@ interface AppState {
   setUsdRate: (n: number) => void
   exchangeRateMode: ExchangeRateMode
   setExchangeRateMode: (mode: ExchangeRateMode) => void
+  preferredExchangeRateType: ExchangeRateType
+  setPreferredExchangeRateType: (type: ExchangeRateType) => void
   saveProfile: (overrides?: {
     userName?: string
     defaultAccount?: string
@@ -258,6 +260,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [defaultAccount, setDefaultAccount] = useState("Efectivo")
   const [usdRate, setUsdRate] = useState(1350)
   const [exchangeRateMode, setExchangeRateMode] = useState<ExchangeRateMode>("api")
+  const [preferredExchangeRateType, setPreferredExchangeRateTypeState] = useState<ExchangeRateType>(() => {
+    if (typeof window === "undefined") return "OFICIAL"
+    return (localStorage.getItem("bb_preferred_rate_type") as ExchangeRateType) ?? "OFICIAL"
+  })
+  const setPreferredExchangeRateType = (type: ExchangeRateType) => {
+    setPreferredExchangeRateTypeState(type)
+    if (typeof window !== "undefined") localStorage.setItem("bb_preferred_rate_type", type)
+  }
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("month")
   const [customRange, setCustomRange] = useState<{ from: Date; to: Date }>(() => {
@@ -587,6 +597,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsdRate,
     exchangeRateMode,
     setExchangeRateMode,
+    preferredExchangeRateType,
+    setPreferredExchangeRateType,
     saveProfile,
     timeFilter,
     setTimeFilter,
@@ -596,7 +608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [user, loadingAuth, isPasswordRecovery, currentView, navDirection, transactions, isProcessing,
        isOnline, pendingOfflineCount, isLoadingHistory, hasMoreTransactions,
        aiProvider, apiKeyClaude, apiKeyOpenAI, apiKeyGemini, apiKey, userName,
-       defaultAccount, usdRate, exchangeRateMode, timeFilter, customRange])
+       defaultAccount, usdRate, exchangeRateMode, preferredExchangeRateType, timeFilter, customRange])
 
   return (
     <AppContext.Provider value={contextValue}>

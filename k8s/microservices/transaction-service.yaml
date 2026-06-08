@@ -4,7 +4,7 @@
 # Construir imagen:
 #   eval $(minikube docker-env)
 #   docker build -f microservices/transaction-service/Dockerfile \
-#     -t budgetbuddy/transaction-service:latest ./microservices
+#     -t pesito/transaction-service:latest ./microservices
 # ============================================================
 
 ---
@@ -12,7 +12,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: transaction-service
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   replicas: 1
   selector:
@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: transaction-service
-          image: budgetbuddy/transaction-service:latest
+          image: pesito/transaction-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082
@@ -35,7 +35,7 @@ spec:
             - name: POSTGRES_HOST
               value: postgres
             - name: POSTGRES_DB
-              value: budgetbuddy
+              value: pesito
             - name: TXN_DB_USER
               valueFrom:
                 secretKeyRef:
@@ -92,7 +92,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: transaction-service
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   selector:
     app: transaction-service

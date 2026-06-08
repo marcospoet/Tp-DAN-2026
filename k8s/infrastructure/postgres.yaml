@@ -7,7 +7,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -19,7 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   replicas: 1
   strategy:
@@ -39,7 +39,7 @@ spec:
             - containerPort: 5432
           env:
             - name: POSTGRES_DB
-              value: budgetbuddy
+              value: pesito
             - name: POSTGRES_USER
               value: postgres
             - name: POSTGRES_PASSWORD
@@ -88,7 +88,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   selector:
     app: postgres

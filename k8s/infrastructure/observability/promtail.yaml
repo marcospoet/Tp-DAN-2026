@@ -11,7 +11,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: promtail
-  namespace: budgetbuddy
+  namespace: pesito
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -31,7 +31,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: promtail
-    namespace: budgetbuddy
+    namespace: pesito
 roleRef:
   kind: ClusterRole
   name: promtail
@@ -42,7 +42,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: promtail
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   selector:
     matchLabels:

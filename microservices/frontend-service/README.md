@@ -3,26 +3,26 @@
 Interfaz web de Pesito, el rastreador de gastos con IA para la economía argentina.
 Registrá movimientos por texto, foto, audio o PDF y dejá que la IA los interprete.
 
-> **Base:** Este frontend fue construido sobre el proyecto [BudgetBuddy](https://github.com/MarcosPiv/BudgetBuddy)
+> **Base:** Este frontend fue construido sobre el proyecto [Pesito](https://github.com/MarcosPiv/Pesito)
 > de [Marcos Pividori](https://github.com/MarcosPiv), adaptado y extendido para correr como microservicio
-> dentro del stack del TP DAN 2026. Se eliminó la dependencia de Supabase (auth, DB y storage),
-> se reemplazó el despliegue de Vercel por Docker/Kubernetes, y se agregaron funcionalidades nuevas
-> (soporte PDF, comprobantes en MinIO, proxy pattern, JWT auth contra `auth-service`, etc.).
+> dentro del stack del TP DAN 2026. Se reemplazó el despliegue de Vercel por Docker/Kubernetes
+> y se agregaron funcionalidades nuevas (soporte PDF, comprobantes en MinIO, proxy pattern,
+> JWT auth contra `auth-service`, etc.).
 
 ---
 
 ## Diferencias respecto al proyecto original
 
-| Aspecto | BudgetBuddy original | Pesito (este proyecto) |
-|---|---|---|
-| Auth | Supabase Auth (OAuth + email) | JWT contra `auth-service` vía API Gateway |
-| Base de datos | Supabase PostgreSQL + RLS | `transaction-service` (PostgreSQL) vía API Gateway |
-| Storage de imágenes | Supabase Storage | MinIO vía `transaction-service` |
-| Llamadas de IA | Directo al provider desde el browser | `ai-service` vía API Gateway (keys server-side) |
-| Deploy | Vercel | Docker multi-stage + Kubernetes |
-| Variables de entorno | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `BACKEND_URL` (server-side only) |
-| Offline queue | localStorage + sync con Supabase | localStorage + sync via REST al `api-gateway` |
-| PDF de facturas | No soportado | Soportado — se envía a `ai-service` para parseo |
+| Aspecto | Implementación |
+|---|---|
+| Auth | JWT contra `auth-service` vía API Gateway |
+| Base de datos | `transaction-service` (PostgreSQL) vía API Gateway |
+| Storage de imágenes | MinIO vía `transaction-service` |
+| Llamadas de IA | `ai-service` vía API Gateway (keys server-side) |
+| Deploy | Docker multi-stage + Kubernetes |
+| Variables de entorno | `BACKEND_URL` (server-side only) |
+| Offline queue | localStorage + sync via REST al `api-gateway` |
+| PDF de facturas | Soportado — se envía a `ai-service` para parseo |
 
 ---
 

@@ -4,7 +4,7 @@
 # IMPORTANTE: Construir la imagen antes de aplicar:
 #   eval $(minikube docker-env)
 #   docker build -f microservices/eureka-server/Dockerfile \
-#     -t budgetbuddy/eureka-server:latest ./microservices
+#     -t pesito/eureka-server:latest ./microservices
 #
 # imagePullPolicy: Never indica a Kubernetes que use la imagen
 # local en vez de intentar bajarla de Docker Hub.
@@ -15,7 +15,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: eureka-server
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   replicas: 1
   selector:
@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: eureka-server
-          image: budgetbuddy/eureka-server:latest
+          image: pesito/eureka-server:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8761
@@ -52,7 +52,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: eureka-server
-  namespace: budgetbuddy
+  namespace: pesito
 spec:
   selector:
     app: eureka-server

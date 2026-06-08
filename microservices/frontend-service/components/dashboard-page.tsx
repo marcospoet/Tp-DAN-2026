@@ -84,6 +84,7 @@ export function DashboardPage() {
     userName,
     defaultAccount,
     usdRate,
+    preferredExchangeRateType,
     apiKey,
     aiProvider,
     timeFilter,
@@ -104,7 +105,7 @@ export function DashboardPage() {
   const [observation, setObservation] = useState("")
   const [showObservation, setShowObservation] = useState(false)
   const [newCurrency, setNewCurrency] = useState<"ARS" | "USD">("ARS")
-  const [newExRateType, setNewExRateType] = useState<ExchangeRateType>("OFICIAL")
+  const [newExRateType, setNewExRateType] = useState<ExchangeRateType>(() => preferredExchangeRateType === "MANUAL" ? "OFICIAL" : preferredExchangeRateType)
   const [newManualRate, setNewManualRate] = useState("")
   const [newTxDate, setNewTxDate] = useState<Date | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -558,8 +559,9 @@ export function DashboardPage() {
         let rateTypeForResult = rateType
         if (curr === "ARS" && result.suggestedCurrency === "USD") {
           currForResult = "USD"
-          // Priority: AI-detected rate type > user's selected rate type (default OFICIAL)
-          const resolvedRateType = result.suggestedExRateType ?? newExRateType
+          // Priority: AI-detected rate type > Settings preference > bar selection
+          const defaultRateType = preferredExchangeRateType === "MANUAL" ? newExRateType : preferredExchangeRateType
+          const resolvedRateType = result.suggestedExRateType ?? defaultRateType
           const liveKey = resolvedRateType.toLowerCase() as keyof typeof liveRates
           rateForResult = (liveRates[liveKey] as { venta?: number } | null)?.venta ?? usdRate
           rateTypeForResult = resolvedRateType as ExchangeRateType
