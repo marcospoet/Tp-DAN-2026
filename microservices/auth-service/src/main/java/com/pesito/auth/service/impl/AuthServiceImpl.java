@@ -115,9 +115,12 @@ public class AuthServiceImpl implements IAuthService {
         if (request.exchangeRateMode() != null)  p.setExchangeRateMode(request.exchangeRateMode());
         if (request.usdRate() != null)           p.setUsdRate(request.usdRate());
         if (request.aiProvider() != null)        p.setAiProvider(request.aiProvider());
-        if (request.apiKeyClaude() != null)      p.setApiKeyClaude(request.apiKeyClaude());
-        if (request.apiKeyOpenai() != null)      p.setApiKeyOpenai(request.apiKeyOpenai());
-        if (request.apiKeyGemini() != null)      p.setApiKeyGemini(request.apiKeyGemini());
+        if (request.apiKeyClaude() != null)
+            p.setApiKeyClaude(request.apiKeyClaude().isBlank() ? null : request.apiKeyClaude());
+        if (request.apiKeyOpenai() != null)
+            p.setApiKeyOpenai(request.apiKeyOpenai().isBlank() ? null : request.apiKeyOpenai());
+        if (request.apiKeyGemini() != null)
+            p.setApiKeyGemini(request.apiKeyGemini().isBlank() ? null : request.apiKeyGemini());
         if (request.defaultAccount() != null)    p.setDefaultAccount(request.defaultAccount());
         if (request.defaultExRateType() != null) p.setDefaultExRateType(request.defaultExRateType());
 
@@ -195,9 +198,18 @@ public class AuthServiceImpl implements IAuthService {
             p.getUserName(), p.getMonthlyBudget(),
             p.getProfileMode(), p.getExchangeRateMode(),
             p.getUsdRate(), p.getAiProvider(),
-            p.getApiKeyClaude(), p.getApiKeyOpenai(), p.getApiKeyGemini(),
+            maskApiKey(p.getApiKeyClaude()),
+            maskApiKey(p.getApiKeyOpenai()),
+            maskApiKey(p.getApiKeyGemini()),
             p.getDefaultAccount(), p.getDefaultExRateType(),
             user.isEmailVerified(), user.getProvider()
         );
+    }
+
+    /** Devuelve solo los primeros 4 y últimos 4 caracteres de la key. Nunca expone el valor completo. */
+    private static String maskApiKey(String key) {
+        if (key == null || key.isBlank()) return null;
+        if (key.length() <= 8) return "****";
+        return key.substring(0, 4) + "...****" + key.substring(key.length() - 4);
     }
 }

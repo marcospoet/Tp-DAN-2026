@@ -1,5 +1,6 @@
 package com.pesito.auth.entity;
 
+import com.pesito.auth.security.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -43,12 +44,15 @@ public class Profile {
     @Builder.Default
     private String aiProvider = "claude";
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "api_key_claude")
     private String apiKeyClaude;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "api_key_openai")
     private String apiKeyOpenai;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "api_key_gemini")
     private String apiKeyGemini;
 
