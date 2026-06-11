@@ -53,6 +53,12 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- Resilience4J — CircuitBreaker + Retry para llamadas a proveedores de IA externos -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
         <!-- PDF rendering — convierte páginas de PDF a imagen PNG para vision (OpenAI/Gemini) -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>

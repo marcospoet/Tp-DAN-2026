@@ -6,12 +6,14 @@ import com.pesito.ai.dto.DetectIntentRequest;
 import com.pesito.ai.dto.ParseRequest;
 import com.pesito.ai.dto.RawAiResponse;
 import com.pesito.ai.dto.TranscribeRequest;
+import com.pesito.ai.exception.AiProviderUnavailableException;
 import com.pesito.ai.service.AiProviderService;
 import com.pesito.ai.service.ChatService;
 import com.pesito.ai.service.PromptService;
 import com.pesito.ai.service.UserApiKeysClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -101,6 +103,9 @@ public class AiController {
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/parse: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/parse: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -142,6 +147,9 @@ public class AiController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/chat: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/chat: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -176,6 +184,9 @@ public class AiController {
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/detect-intent: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/detect-intent: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -197,6 +208,9 @@ public class AiController {
             String userContent = buildCsvMappingUserContent(req);
             String raw = aiProvider.callSingleTurn(PromptService.CSV_MAPPING_PROMPT, userContent);
             return ResponseEntity.ok(new RawAiResponse(raw));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/csv-mapping: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/csv-mapping: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -224,6 +238,9 @@ public class AiController {
                     req.getAudioBase64(), req.getMimeType(),
                     req.getProvider(), apiKey);
             return ResponseEntity.ok(Map.of("transcription", transcription != null ? transcription : ""));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/transcribe: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/transcribe: {}", e.getMessage());
             return ResponseEntity.internalServerError()

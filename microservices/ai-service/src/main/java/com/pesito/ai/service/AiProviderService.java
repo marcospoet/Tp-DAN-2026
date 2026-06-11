@@ -2,6 +2,7 @@ package com.pesito.ai.service;
 
 import com.pesito.ai.config.AiProperties;
 import com.pesito.ai.dto.ChatTurnDto;
+import com.pesito.ai.exception.AiProviderUnavailableException;
 import com.pesito.ai.tool.AgentTurnResult;
 import com.pesito.ai.tool.ToolCall;
 import com.pesito.ai.tool.ToolDefinition;
@@ -9,6 +10,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
@@ -45,11 +51,32 @@ public class AiProviderService {
     private final WebClient webClient;
     private final AiProperties props;
     private final ObjectMapper mapper;
+    private final CircuitBreaker circuitBreaker;
+    private final Retry retry;
 
-    public AiProviderService(WebClient webClient, AiProperties props) {
+    public AiProviderService(WebClient webClient, AiProperties props,
+                              CircuitBreakerRegistry circuitBreakerRegistry, RetryRegistry retryRegistry) {
         this.webClient = webClient;
         this.props = props;
         this.mapper = new ObjectMapper();
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("ai-provider");
+        this.retry = retryRegistry.retry("ai-provider");
+    }
+
+    /**
+     * Wraps a blocking call to an external AI provider with the shared
+     * circuit breaker + retry. If the circuit is open, throws
+     * {@link AiProviderUnavailableException} instead of attempting the call.
+     */
+    private String executeAiCall(java.util.function.Supplier<String> call) {
+        java.util.function.Supplier<String> decorated = Retry.decorateSupplier(
+                retry, CircuitBreaker.decorateSupplier(circuitBreaker, call));
+        try {
+            return decorated.get();
+        } catch (CallNotPermittedException e) {
+            throw new AiProviderUnavailableException(
+                    "El proveedor de IA no está disponible temporalmente. Intente nuevamente en unos minutos.");
+        }
     }
 
     // ── Provider / key resolution ─────────────────────────────────────────────
@@ -222,7 +249,7 @@ public class AiProviderService {
             body.set("messages", messages);
             body.set("tools", buildClaudeTools(tools));
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(CLAUDE_URL)
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
@@ -230,7 +257,7 @@ public class AiProviderService {
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             JsonNode content = json.path("content");
@@ -286,14 +313,14 @@ public class AiProviderService {
             body.set("messages", allMessages);
             body.set("tools", buildOpenAiTools(tools));
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(OPENAI_URL)
                     .header("Authorization", "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             JsonNode message = json.path("choices").get(0).path("message");
@@ -353,13 +380,13 @@ public class AiProviderService {
             genConfig.put("temperature", 0.2);
             body.set("generationConfig", genConfig);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             JsonNode parts = json.path("candidates").get(0).path("content").path("parts");
@@ -442,20 +469,21 @@ public class AiProviderService {
             body.set("messages", messages);
 
             // PDF document blocks require the pdfs beta header
-            WebClient.RequestBodySpec claudeReq = webClient.post()
+            WebClient.RequestBodySpec claudeReqBuilder = webClient.post()
                     .uri(CLAUDE_URL)
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01");
             if (hasFile) {
-                claudeReq = claudeReq.header("anthropic-beta", "pdfs-2024-09-25");
+                claudeReqBuilder = claudeReqBuilder.header("anthropic-beta", "pdfs-2024-09-25");
             }
+            final WebClient.RequestBodySpec claudeReq = claudeReqBuilder;
 
-            String response = claudeReq
+            String response = executeAiCall(() -> claudeReq
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("content").get(0).path("text").asText();
@@ -482,7 +510,7 @@ public class AiProviderService {
             }
             body.set("messages", messages);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(CLAUDE_URL)
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
@@ -490,7 +518,7 @@ public class AiProviderService {
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("content").get(0).path("text").asText();
@@ -559,14 +587,14 @@ public class AiProviderService {
             messages.add(userMsg);
             body.set("messages", messages);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(OPENAI_URL)
                     .header("Authorization", "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("choices").get(0).path("message").path("content").asText();
@@ -598,14 +626,14 @@ public class AiProviderService {
             }
             body.set("messages", messages);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(OPENAI_URL)
                     .header("Authorization", "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("choices").get(0).path("message").path("content").asText();
@@ -667,13 +695,13 @@ public class AiProviderService {
             genConfig.put("temperature", 0.1);
             body.set("generationConfig", genConfig);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
@@ -750,13 +778,13 @@ public class AiProviderService {
             genConfig.put("temperature", 0);
             body.set("generationConfig", genConfig);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
@@ -789,13 +817,13 @@ public class AiProviderService {
                 @Override public String getFilename() { return filename; }
             }, MediaType.parseMediaType(finalMime));
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri("https://api.openai.com/v1/audio/transcriptions")
                     .header("Authorization", "Bearer " + apiKey)
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("text").asText();
@@ -837,13 +865,13 @@ public class AiProviderService {
             genConfig.put("temperature", 0.7);
             body.set("generationConfig", genConfig);
 
-            String response = webClient.post()
+            String response = executeAiCall(() -> webClient.post()
                     .uri(GEMINI_URL + "?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body.toString())
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block());
 
             JsonNode json = mapper.readTree(response);
             return json.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
