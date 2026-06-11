@@ -126,6 +126,8 @@ services:
       context: ./microservices
       dockerfile: eureka-server/Dockerfile
     container_name: bb-eureka
+    mem_limit: 384m
+    mem_reservation: 192m
     ports:
       - "8761:8761"      # Dashboard: http://localhost:8761
     networks:
@@ -148,12 +150,15 @@ services:
       context: ./microservices
       dockerfile: auth-service/Dockerfile
     container_name: bb-auth
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_DB: pesito
       AUTH_DB_USER: ${AUTH_DB_USER}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -194,6 +199,8 @@ services:
       context: ./microservices
       dockerfile: transaction-service/Dockerfile
     container_name: bb-transactions
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_DB: pesito
@@ -231,6 +238,8 @@ services:
       context: ./microservices
       dockerfile: ai-service/Dockerfile
     container_name: bb-ai
+    mem_limit: 768m
+    mem_reservation: 384m
     environment:
       MONGO_HOST: mongodb
       MONGO_USER: ${MONGO_APP_USER}
@@ -240,6 +249,8 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_HOST: eureka-server
       TRANSACTION_HOST: transaction-service
+      AUTH_HOST: auth-service
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       SPRING_PROFILES_ACTIVE: docker
       # PostgreSQL (pgvector) — knowledge base de RAG
       POSTGRES_HOST: postgres
@@ -281,6 +292,8 @@ services:
       context: ./microservices
       dockerfile: api-gateway/Dockerfile
     container_name: bb-gateway
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET}
       EUREKA_HOST: eureka-server
@@ -312,6 +325,8 @@ services:
       args:
         NEXT_PUBLIC_OAUTH_URL: http://localhost:8080
     container_name: bb-frontend
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       BACKEND_URL: http://api-gateway:8080
     ports:

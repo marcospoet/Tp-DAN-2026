@@ -25,4 +25,16 @@ public class WebClientConfig {
                 .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
                 .build();
     }
+
+    /**
+     * Cliente para llamar al endpoint interno de auth-service que devuelve
+     * las API keys descifradas del usuario (provider keys del chat/RAG).
+     */
+    @Bean
+    public WebClient authServiceWebClient(AiProperties props) {
+        return WebClient.builder()
+                .baseUrl(props.getAuthServiceBaseUrl())
+                .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
+    }
 }

@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Bot, User, Send, Mic, Loader2, Trash2, Lock, ChevronLeft, ChevronUp, RotateCcw } from "lucide-react"
+import ReactMarkdown from "react-markdown"
 import { Button } from "@/components/ui/button"
 import type { ChatMessage } from "./shared"
 
@@ -248,12 +249,36 @@ export function ChatPanel({
                   )}
                 </div>
                 <div
-                  className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "bot"
+                  className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${msg.role === "bot"
                     ? "bg-secondary text-foreground rounded-tl-md"
-                    : "bg-primary text-primary-foreground rounded-tr-md"
+                    : "bg-primary text-primary-foreground rounded-tr-md whitespace-pre-wrap"
                     }`}
                 >
-                  {msg.text}
+                  {msg.role === "bot" ? (
+                    <div className="chat-markdown space-y-2 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 space-y-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 space-y-1">{children}</ol>,
+                          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                          a: ({ children, href }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                              {children}
+                            </a>
+                          ),
+                          code: ({ children }) => (
+                            <code className="bg-background/50 rounded px-1 py-0.5 text-xs">{children}</code>
+                          ),
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.text
+                  )}
                 </div>
               </motion.div>
             ))}

@@ -165,6 +165,33 @@ El campo `amount_usd` se calcula como: `amount (ARS) / tx_rate`
 
 ---
 
+## Generación automática de transacciones recurrentes
+
+`RecurringTransactionScheduler` corre todos los días a las **03:30 AM**
+(`@Scheduled(cron = "0 30 3 * * *")`) y genera automáticamente la próxima
+ocurrencia de cada transacción marcada como `is_recurring = true` cuando se
+cumple su `recurring_frequency` (`weekly` | `biweekly` | `monthly` | `annual`),
+sin requerir que el usuario haga nada manualmente.
+
+```
+Por cada serie (mismo user_id + description + category + recurring_frequency):
+  1. Tomar la transacción más reciente como plantilla
+  2. Calcular la próxima fecha (plusWeeks/plusMonths/plusYears, con clamp
+     automático al último día del mes vía LocalDate)
+  3. Mientras esa fecha no sea posterior a hoy:
+       - crear una nueva transacción copiando los datos de la plantilla
+       - refrescar tx_rate/amount_usd contra DolarAPI si exchange_rate_type
+         no es MANUAL (con fallback a los valores de la plantilla si falla)
+       - publicar evento transaction.created
+       - avanzar la plantilla a la ocurrencia recién creada y repetir
+  4. Tope de 24 ocurrencias generadas por serie por corrida (guard de seguridad)
+```
+
+Esto reemplaza al botón manual "Aplicar este mes" (eliminado de Analytics),
+que sólo contemplaba frecuencia mensual y podía generar duplicados.
+
+---
+
 ## Eventos consumidos de RabbitMQ
 
 ```

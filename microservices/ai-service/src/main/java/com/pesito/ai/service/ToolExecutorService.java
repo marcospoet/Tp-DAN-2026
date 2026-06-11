@@ -46,7 +46,7 @@ public class ToolExecutorService {
     }
 
     public String runAgentLoop(String userId, String systemPrompt, List<ChatTurnDto> history,
-                                String providerOverride, String apiKeyOverride) {
+                                String providerOverride, String apiKeyOverride, String userOpenAiKey) {
         String provider = aiProvider.resolveProvider(providerOverride);
         String apiKey = aiProvider.resolveKey(provider, apiKeyOverride);
         List<ToolDefinition> tools = toolRegistry.getTools();
@@ -75,7 +75,7 @@ public class ToolExecutorService {
             for (ToolCall call : result.toolCalls()) {
                 log.info("[TOOL] name={} input={}", call.name(), call.arguments());
                 String toolResult = "search_financial_knowledge".equals(call.name())
-                        ? ragTools.execute(call, provider, apiKey)
+                        ? ragTools.execute(call, provider, apiKey, userOpenAiKey)
                         : financialTools.execute(userId, call);
                 log.debug("[TOOL_RESULT] name={} output={}", call.name(),
                         toolResult.substring(0, Math.min(200, toolResult.length())));

@@ -69,7 +69,7 @@ interface ChatHandlerParams {
 
 const INITIAL_BOT_MESSAGE: ChatMessage = {
   role: "bot",
-  text: "¡Hola! Soy Pesito, tu asistente financiero 🪙\n\n📝 Registrar  →  \"gasté 3500 en almuerzo\" · \"cobré 200 USD\"\n🔍 Consultar  →  \"¿cuánto gasté esta semana?\" · \"¿me alcanza el presupuesto?\"\n✏️ Modificar  →  \"al taxi de ayer, cambiá el monto a 2800\"\n🗑️ Eliminar   →  \"borrá el super de ayer\"\n🔁 Recurrente →  \"marcá el alquiler como recurrente\"\n📊 Analizar   →  \"¿en qué categoría gasto más?\"\n\n¿En qué te ayudo?",
+  text: "¡Hola! Soy Pesito 🪙, tu asistente financiero.\n\nPuedo ayudarte a:\n- 📝 **Registrar** gastos e ingresos\n- 🔍 **Consultar** saldos y gastos\n- ✏️ **Modificar** o 🗑️ **eliminar** movimientos\n- 🔁 Marcar movimientos **recurrentes**\n- 📊 **Analizar** tus finanzas\n\nEscribime algo como \"gasté 3500 en almuerzo\" o tocá una sugerencia 👇",
 }
 
 // #7 — Rolling compression constants
@@ -95,7 +95,11 @@ export function useChatHandler({
     try {
       const saved = sessionStorage.getItem("bb_chat_messages")
       const parsed = saved ? JSON.parse(saved) : null
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // If the user hasn't chatted yet, always show the latest welcome message
+        if (parsed.length === 1 && parsed[0]?.role === "bot") return [INITIAL_BOT_MESSAGE]
+        return parsed
+      }
     } catch {}
     return [INITIAL_BOT_MESSAGE]
   })
@@ -232,6 +236,7 @@ export function useChatHandler({
       .filter(t => { const d = new Date(t.date); return t.type === "expense" && d >= sevenDaysAgo && d < todayStart })
       .reduce((a, t) => a + toArs(t), 0)
     const dailyAvg7 = last7Exp / 7
+    const weekExp = last7Exp + todayExp
 
     const top3Month = [...monthTxs]
       .filter(t => t.type === "expense")
@@ -261,7 +266,8 @@ export function useChatHandler({
       `Ingresos mes: ${formatCurrency(sumIncome(monthTxs))}`,
       `Gastos mes: ${formatCurrency(monthExp)}`,
       `Proyección a fin de mes (ritmo actual): ${formatCurrency(projectionEOM)}`,
-      `Promedio diario últimos 7 días: ${formatCurrency(dailyAvg7)}`,
+      `Gastos de esta semana (últimos 7 días, incluyendo hoy): ${formatCurrency(weekExp)}`,
+      `Promedio diario de los 7 días previos a hoy (sin contar hoy): ${formatCurrency(dailyAvg7)}`,
       `Gasto de hoy: ${formatCurrency(todayExp)}`,
       todayUSDIncome > 0 ? `Ingreso de hoy en USD: USD ${todayUSDIncome.toLocaleString("es-AR", { maximumFractionDigits: 2 })}` : null,
       todayUSDExpense > 0 ? `Gasto de hoy en USD: USD ${todayUSDExpense.toLocaleString("es-AR", { maximumFractionDigits: 2 })}` : null,
@@ -306,7 +312,7 @@ export function useChatHandler({
     }
 
     try {
-      const reply = await callAIChat(aiProvider, apiKey, buildFinancialContext(), history, audioAttachment)
+      const reply = await callAIChat(aiProvider, buildFinancialContext(), history, audioAttachment)
       setChatMessages(prev => [...prev, { role: "bot", text: reply }])
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al conectar."
@@ -342,7 +348,7 @@ export function useChatHandler({
       setIsChatProcessing(true)
       let handled = false
       try {
-        const del = await callAIDeleteDetect(aiProvider, apiKey, userMsg)
+        const del = await callAIDeleteDetect(aiProvider, userMsg)
         if (del.match) {
           handled = true
           const found = findTransactionByMatch(transactionsRef.current, del.match)
@@ -376,7 +382,7 @@ export function useChatHandler({
       setIsChatProcessing(true)
       let handled = false
       try {
-        const rec = await callAIRecurringDetect(aiProvider, apiKey, userMsg)
+        const rec = await callAIRecurringDetect(aiProvider, userMsg)
         if (rec.match) {
           handled = true
           const found = findTransactionByMatch(transactionsRef.current, rec.match)
@@ -416,7 +422,7 @@ export function useChatHandler({
       setIsChatProcessing(true)
       let handled = false
       try {
-        const upd = await callAIUpdateDetect(aiProvider, apiKey, userMsg)
+        const upd = await callAIUpdateDetect(aiProvider, userMsg)
         if (upd.match && Object.values(upd.updates).some(v => v !== undefined)) {
           handled = true
           const found = findTransactionByMatch(transactionsRef.current, upd.match)
@@ -527,7 +533,7 @@ export function useChatHandler({
     if (apiKey.trim() && /\d/.test(userMsg)) {
       setIsChatProcessing(true)
       try {
-        const aiResult = await callAI(aiProvider, apiKey, userMsg, undefined)
+        const aiResult = await callAI(aiProvider, userMsg, undefined)
         const results = Array.isArray(aiResult) ? aiResult : [aiResult]
         const valid = results.filter(r => r.type !== "unknown")
         if (valid.length > 0) {
@@ -573,6 +579,7 @@ export function useChatHandler({
               exchangeRateType: rateType2,
               observation: result.observation,
               isRecurring: result.suggestRecurring === true,
+              recurringFrequency: result.suggestRecurring === true ? (result.recurringFrequency ?? "monthly") : undefined,
               account: chatDetectedAccount,
             }, (msg) => { setChatMessages(prev => [...prev, { role: "bot", text: `⚠️ ${msg}` }]) })
             const arsAmt = curr2 === "USD" ? (result.amount * (rate2 ?? usdRate)) : result.amount
@@ -628,7 +635,7 @@ export function useChatHandler({
       // Transcribe first → route through intent detection (modify/delete/recurring/new tx)
       setIsChatProcessing(true)
       setChatStatusText("Transcribiendo...")
-      const cleanText = await transcribeAudioAttachment(aiProvider, apiKey, attachment)
+      const cleanText = await transcribeAudioAttachment(aiProvider, attachment)
       setChatStatusText(null)
       setIsChatProcessing(false)
       if (cleanText) {
@@ -682,7 +689,7 @@ export function useChatHandler({
           if (apiKey.trim()) {
             setIsChatProcessing(true)
             setChatStatusText("Transcribiendo...")
-            const cleanText = await transcribeAudioAttachment(aiProvider, apiKey, attachment)
+            const cleanText = await transcribeAudioAttachment(aiProvider, attachment)
             setChatStatusText(null)
             setIsChatProcessing(false)
             if (cleanText) {

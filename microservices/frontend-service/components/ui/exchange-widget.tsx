@@ -12,7 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { useExchangeRate, type DolarRate } from "@/hooks/use-exchange-rate"
-import { useApp } from "@/lib/app-context"
+import { useSettings } from "@/lib/settings-context"
 import { cn } from "@/lib/utils"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ interface ExchangeWidgetProps {
 }
 
 export function ExchangeWidget({ compact = false }: ExchangeWidgetProps) {
-  const { usdRate, setUsdRate, exchangeRateMode } = useApp()
+  const { usdRate, setUsdRate, exchangeRateMode } = useSettings()
   const isApiMode = exchangeRateMode === "api"
 
   const { rates, loading, error, lastUpdated, refresh } = useExchangeRate({

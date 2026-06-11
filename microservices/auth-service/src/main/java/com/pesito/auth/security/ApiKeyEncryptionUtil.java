@@ -71,7 +71,8 @@ public class ApiKeyEncryptionUtil {
     }
 
     public static String decrypt(String encoded) {
-        if (encoded == null) return null;
+        // Strings vacíos pueden existir en filas anteriores al cifrado (legacy) — tratar como ausencia de key.
+        if (encoded == null || encoded.isBlank()) return null;
         try {
             byte[] combined = Base64.getDecoder().decode(encoded);
             byte[] iv = Arrays.copyOfRange(combined, 0, IV_LENGTH_BYTES);

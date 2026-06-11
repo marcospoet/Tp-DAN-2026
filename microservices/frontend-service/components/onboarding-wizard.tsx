@@ -7,7 +7,7 @@ import {
   ArrowRight, CheckCircle2,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { useApp, type AIProvider } from "@/lib/app-context"
+import { useSettings, type AIProvider } from "@/lib/settings-context"
 import { ONBOARDING_KEY } from "@/components/dashboard/shared"
 
 const KEY_PREFIXES: Record<AIProvider, string> = {
@@ -29,7 +29,7 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
     setAiProvider,
     setApiKeyClaude, setApiKeyOpenAI, setApiKeyGemini,
     saveProfile,
-  } = useApp()
+  } = useSettings()
 
   const hasExistingKey = !!(apiKeyClaude || apiKeyOpenAI || apiKeyGemini)
 

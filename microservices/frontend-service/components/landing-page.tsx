@@ -17,7 +17,7 @@ import {
   Download, Smartphone, DollarSign, Camera, MessageCircle,
   ShieldCheck, Repeat, Github, TrendingUp, Zap, Share, Check,
 } from "lucide-react"
-import { useApp } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
 import { GooeyText } from "@/components/ui/gooey-text-morphing"
 import { usePerformanceMode } from "@/hooks/use-performance-mode"
 
@@ -317,7 +317,7 @@ function GlowCard({ children, className, glow = "oklch(0.72 0.19 160 / 0.13)", d
 // ── Main LandingPage ─────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 export function LandingPage() {
-  const { setView } = useApp()
+  const { setView } = useAuth()
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [isIOS, setIsIOS] = useState(false)

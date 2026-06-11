@@ -7,7 +7,9 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useApp, type TimeFilter, type ExchangeRateType, type RecurringFrequency } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
+import { useTransactions, type RecurringFrequency } from "@/lib/transactions-context"
+import { useSettings, type TimeFilter, type ExchangeRateType } from "@/lib/settings-context"
 import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
 import { getToken } from "@/lib/api-client"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
@@ -72,15 +74,20 @@ function generateRetroactiveDates(startDate: Date, freq: RecurringFrequency): Da
 }
 
 export function DashboardPage() {
+  const { user, setView, signOut } = useAuth()
   const {
-    user,
     transactions,
     addTransaction,
     patchTransactionReceiptUrl,
     deleteTransaction,
     updateTransaction,
-    setView,
-    signOut,
+    isOnline,
+    pendingOfflineCount,
+    isLoadingHistory,
+    hasMoreTransactions,
+    loadMoreTransactions,
+  } = useTransactions()
+  const {
     userName,
     defaultAccount,
     usdRate,
@@ -91,13 +98,8 @@ export function DashboardPage() {
     setTimeFilter,
     customRange,
     setCustomRange,
-    isOnline,
-    pendingOfflineCount,
-    isLoadingHistory,
-    hasMoreTransactions,
-    loadMoreTransactions,
     defaultExRateType,
-  } = useApp()
+  } = useSettings()
 
   // ── Magic Bar state ──────────────────────────────────────────────────────────
   const [magicInput, setMagicInput] = useState("")
@@ -222,9 +224,13 @@ export function DashboardPage() {
 
   const suggestedPrompts = useMemo(() => {
     if (transactions.length === 0) {
-      return ["¿Cómo registro un gasto?", "¿Qué puedo consultar?", "¿Cómo funciona el asistente?"]
+      return [
+        "Gasté 3500 en almuerzo",
+        "¿Cómo registro un gasto?",
+        "¿Cómo funciona el asistente?",
+      ]
     }
-    const prompts = ["¿Cuánto gasté esta semana?", "¿Cómo está mi balance este mes?"]
+    const prompts = ["¿Cuánto gasté esta semana?", "¿Me alcanza el presupuesto este mes?"]
     prompts.push(transactions.some(t => t.currency === "USD")
       ? "¿Cuánto gasté en dólares este mes?"
       : "¿En qué categoría gasto más?")
@@ -496,7 +502,7 @@ export function DashboardPage() {
       let finalTextInput = textInput
       if (audioAtt) {
         setProcessingLabel("Transcribiendo audio...")
-        const transcription = await transcribeAudioAttachment(aiProvider, apiKey, audioAtt)
+        const transcription = await transcribeAudioAttachment(aiProvider, audioAtt)
         if (!transcription) {
           const errMsg = (aiProvider as string) === "claude"
             ? "Claude no soporta transcripción de audio. Cambiá a OpenAI o Gemini en Ajustes."
@@ -512,7 +518,7 @@ export function DashboardPage() {
       const nonAudioAttachments = aiAttachments.filter(a => a.type !== "audio")
 
       const aiResult = await Promise.race([
-        callAI(aiProvider, apiKey, finalTextInput, nonAudioAttachments.length > 0 ? nonAudioAttachments : undefined),
+        callAI(aiProvider, finalTextInput, nonAudioAttachments.length > 0 ? nonAudioAttachments : undefined),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("La IA tardó demasiado. Revisá tu conexión e intentá de nuevo.")), 30_000)
         ),
@@ -604,6 +610,7 @@ export function DashboardPage() {
           exchangeRateType: rateTypeForResult,
           observation: obs ?? result.observation,
           isRecurring: result.suggestRecurring === true,
+          recurringFrequency: result.suggestRecurring === true ? (result.recurringFrequency ?? "monthly") : undefined,
           account: detectedAccount,
         }, (msg) => {
           setAiError(msg)

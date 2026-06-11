@@ -9,6 +9,7 @@ import com.pesito.ai.dto.TranscribeRequest;
 import com.pesito.ai.service.AiProviderService;
 import com.pesito.ai.service.ChatService;
 import com.pesito.ai.service.PromptService;
+import com.pesito.ai.service.UserApiKeysClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -35,13 +36,30 @@ public class AiController {
     private final AiProviderService aiProvider;
     private final ChatService chatService;
     private final PromptService prompts;
+    private final UserApiKeysClient userApiKeysClient;
 
     public AiController(AiProviderService aiProvider,
                         ChatService chatService,
-                        PromptService prompts) {
+                        PromptService prompts,
+                        UserApiKeysClient userApiKeysClient) {
         this.aiProvider = aiProvider;
         this.chatService = chatService;
         this.prompts = prompts;
+        this.userApiKeysClient = userApiKeysClient;
+    }
+
+    /**
+     * Resuelve la API key del usuario para el provider indicado consultando el
+     * endpoint interno de auth-service. La key nunca viaja desde el frontend.
+     */
+    private String resolveUserApiKey(String userId, String provider) {
+        UserApiKeysClient.UserApiKeys keys = userApiKeysClient.getApiKeys(userId);
+        String p = aiProvider.resolveProvider(provider);
+        return switch (p) {
+            case "openai" -> keys.openai();
+            case "gemini" -> keys.gemini();
+            default -> keys.claude();
+        };
     }
 
     /**
@@ -68,6 +86,7 @@ public class AiController {
             }
             log.info("Parsing request — input length: {}, hasPdf: {}", safeInput.length(), hasPdf);
 
+            String apiKey = resolveUserApiKey(userId, req.getProvider());
             String raw = aiProvider.callSingleTurn(
                     PromptService.SYSTEM_PROMPT,
                     userMessage,
@@ -76,7 +95,7 @@ public class AiController {
                     req.getFileBase64(),
                     req.getFileMimeType(),
                     req.getProvider(),
-                    req.getApiKey()
+                    apiKey
             );
             log.info("Parse raw response: {}", raw);
             return ResponseEntity.ok(new RawAiResponse(raw));
@@ -111,7 +130,15 @@ public class AiController {
             String safeMsg = prompts.sanitizeUserInput(req.getMessage());
             req.setMessage(safeMsg);
 
-            ChatResponse response = chatService.chat(req, req.getProvider(), req.getApiKey());
+            UserApiKeysClient.UserApiKeys userKeys = userApiKeysClient.getApiKeys(req.getUserId());
+            String provider = aiProvider.resolveProvider(req.getProvider());
+            String apiKey = switch (provider) {
+                case "openai" -> userKeys.openai();
+                case "gemini" -> userKeys.gemini();
+                default -> userKeys.claude();
+            };
+
+            ChatResponse response = chatService.chat(req, req.getProvider(), apiKey, userKeys.openai());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -144,7 +171,8 @@ public class AiController {
                 default -> PromptService.DELETE_DETECT_PROMPT;
             };
 
-            String raw = aiProvider.callSingleTurn(systemPrompt, userMessage, null, null, req.getProvider(), req.getApiKey());
+            String apiKey = resolveUserApiKey(userId, req.getProvider());
+            String raw = aiProvider.callSingleTurn(systemPrompt, userMessage, null, null, req.getProvider(), apiKey);
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -191,9 +219,10 @@ public class AiController {
             if (req.getAudioBase64() == null || req.getAudioBase64().isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "No se recibió audio."));
             }
+            String apiKey = resolveUserApiKey(userId, req.getProvider());
             String transcription = aiProvider.transcribeAudio(
                     req.getAudioBase64(), req.getMimeType(),
-                    req.getProvider(), req.getApiKey());
+                    req.getProvider(), apiKey);
             return ResponseEntity.ok(Map.of("transcription", transcription != null ? transcription : ""));
         } catch (Exception e) {
             log.error("Error in /api/ai/transcribe: {}", e.getMessage());

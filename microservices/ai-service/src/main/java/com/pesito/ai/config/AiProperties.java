@@ -12,6 +12,8 @@ public class AiProperties {
     private String openaiApiKey = "";
     private String geminiApiKey = "";
     private String transactionServiceBaseUrl = "http://localhost:8082";
+    private String authServiceBaseUrl = "http://localhost:8081";
+    private String internalApiSecret = "";
     private boolean toolsEnabled = true;
     private String langfusePublicKey = "";
     private String langfuseSecretKey = "";
@@ -31,6 +33,12 @@ public class AiProperties {
 
     public String getTransactionServiceBaseUrl() { return transactionServiceBaseUrl; }
     public void setTransactionServiceBaseUrl(String transactionServiceBaseUrl) { this.transactionServiceBaseUrl = transactionServiceBaseUrl; }
+
+    public String getAuthServiceBaseUrl() { return authServiceBaseUrl; }
+    public void setAuthServiceBaseUrl(String authServiceBaseUrl) { this.authServiceBaseUrl = authServiceBaseUrl; }
+
+    public String getInternalApiSecret() { return internalApiSecret; }
+    public void setInternalApiSecret(String internalApiSecret) { this.internalApiSecret = internalApiSecret; }
 
     public boolean isToolsEnabled() { return toolsEnabled; }
     public void setToolsEnabled(boolean toolsEnabled) { this.toolsEnabled = toolsEnabled; }

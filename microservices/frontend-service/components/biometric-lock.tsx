@@ -4,7 +4,7 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { Fingerprint, Wallet, KeyRound, Loader2 } from "lucide-react"
 import { useBiometric } from "@/hooks/use-biometric"
-import { useApp } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
 
 interface BiometricLockProps {
   onUnlock: () => void
@@ -12,7 +12,7 @@ interface BiometricLockProps {
 
 export function BiometricLock({ onUnlock }: BiometricLockProps) {
   const { authenticate } = useBiometric()
-  const { signOut } = useApp()
+  const { signOut } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

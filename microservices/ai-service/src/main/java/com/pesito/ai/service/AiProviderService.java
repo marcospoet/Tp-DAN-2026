@@ -54,11 +54,11 @@ public class AiProviderService {
 
     // ── Provider / key resolution ─────────────────────────────────────────────
 
-    String resolveProvider(String override) {
+    public String resolveProvider(String override) {
         return (override != null && !override.isBlank()) ? override.toLowerCase() : props.getProvider().toLowerCase();
     }
 
-    String resolveKey(String provider, String override) {
+    public String resolveKey(String provider, String override) {
         if (override != null && !override.isBlank()) return override;
         return switch (provider) {
             case "openai" -> props.getOpenaiApiKey();

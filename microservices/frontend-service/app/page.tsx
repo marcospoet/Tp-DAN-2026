@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
-import { AppProvider, useApp } from "@/lib/app-context"
+import { AppProvider } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
 import { LandingPage } from "@/components/landing-page"
 import { AuthPage } from "@/components/auth-page"
 import { BiometricLock } from "@/components/biometric-lock"
@@ -30,7 +31,7 @@ const AnalyticsPage = dynamic(
 )
 
 function AppRouter() {
-  const { currentView, loadingAuth, user, navDirection } = useApp()
+  const { currentView, loadingAuth, user, navDirection } = useAuth()
   // Always start false to match SSR; updated client-side in useEffect to avoid #418 hydration error
   const [locked, setLocked] = useState(false)
   const [hadSession, setHadSession] = useState(false)

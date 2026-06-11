@@ -4,7 +4,8 @@ import { useState, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Upload, Wand2, Loader2, Check, ChevronDown, X, AlertCircle, FileUp } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useApp } from "@/lib/app-context"
+import { useTransactions } from "@/lib/transactions-context"
+import { useSettings } from "@/lib/settings-context"
 import { callAICSVMapping, type CSVMapping } from "@/lib/ai"
 import { CATEGORY_ICON_MAP } from "@/components/dashboard/shared"
 import { toast } from "sonner"
@@ -240,7 +241,8 @@ function ColSelect({ label, value, onChange, headers, optional = false }: {
 interface ImportCsvModalProps { open: boolean; onClose: () => void }
 
 export function ImportCsvModal({ open, onClose }: ImportCsvModalProps) {
-  const { addTransaction, apiKey, aiProvider } = useApp()
+  const { addTransaction } = useTransactions()
+  const { apiKey, aiProvider } = useSettings()
 
   const [step, setStep] = useState<Step>("upload")
   const [headers, setHeaders] = useState<string[]>([])
@@ -290,7 +292,7 @@ export function ImportCsvModal({ open, onClose }: ImportCsvModalProps) {
     if (!apiKey?.trim()) { toast.error("Configurá tu API key en Configuración para usar la detección automática."); return }
     setAiLoading(true)
     try {
-      const result = await callAICSVMapping(aiProvider, apiKey, headers, rows.slice(0, 3))
+      const result = await callAICSVMapping(aiProvider, headers, rows.slice(0, 3))
       if (!result) { toast.error("La IA no pudo identificar las columnas. Mapeá manualmente."); return }
       setMapping(m => ({
         ...m,
