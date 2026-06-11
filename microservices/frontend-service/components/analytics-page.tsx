@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   BarChart2,
   Loader2,
-  RefreshCw,
   Repeat,
   ShoppingCart,
   Car,
@@ -14,7 +13,6 @@ import {
   Code,
   Dumbbell,
   ArrowDownLeft,
-  Check,
   Download,
   FileText,
   TrendingUp,
@@ -161,9 +159,7 @@ type ExportMode = "thisMonth" | "lastMonth" | "thisYear" | "lastYear" | "custom"
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function AnalyticsPage() {
-  const { setView, transactions, addTransaction, updateTransaction, deleteTransaction, usdRate, isLoadingHistory, hasMoreTransactions, loadMoreTransactions, timeFilter, setTimeFilter, customRange } = useApp()
-  const [applyingMonth, setApplyingMonth] = useState(false)
-  const [appliedCount, setAppliedCount] = useState<number | null>(null)
+  const { setView, transactions, updateTransaction, deleteTransaction, usdRate, isLoadingHistory, hasMoreTransactions, loadMoreTransactions, timeFilter, setTimeFilter, customRange } = useApp()
   const [recurringFreqFilter, setRecurringFreqFilter] = useState<"all" | "weekly" | "biweekly" | "monthly" | "annual">("all")
   const [expandedFutureGroups, setExpandedFutureGroups] = useState<Set<string>>(new Set())
   const [deletingFutureTx, setDeletingFutureTx] = useState<Transaction | null>(null)
@@ -403,48 +399,6 @@ export function AnalyticsPage() {
       })
     return Array.from(map.values())
   }, [transactions])
-
-  // ── Apply recurring: create this month's missing transactions
-  const handleApplyMonth = () => {
-    const now = new Date()
-    const thisMonth = now.getMonth()
-    const thisYear = now.getFullYear()
-
-    const alreadyThisMonth = new Set(
-      transactions
-        .filter(tx => {
-          const d = new Date(tx.date)
-          return d.getMonth() === thisMonth && d.getFullYear() === thisYear
-        })
-        .map(tx => `${tx.description.toLowerCase()}::${tx.category}`)
-    )
-
-    const toCreate = recurringTemplates.filter(
-      tpl => !alreadyThisMonth.has(`${tpl.description.toLowerCase()}::${tpl.category}`)
-    )
-
-    setApplyingMonth(true)
-    toCreate.forEach(tpl => {
-      addTransaction({
-        description: tpl.description,
-        amount: tpl.amount,
-        type: tpl.type,
-        icon: tpl.icon,
-        category: tpl.category,
-        date: now,
-        observation: tpl.observation,
-        currency: tpl.currency,
-        amountUsd: tpl.amountUsd,
-        txRate: tpl.txRate,
-        exchangeRateType: tpl.exchangeRateType,
-        isRecurring: true,
-        recurringFrequency: tpl.recurringFrequency ?? "monthly",
-      })
-    })
-    setApplyingMonth(false)
-    setAppliedCount(toCreate.length)
-    setTimeout(() => setAppliedCount(null), 4000)
-  }
 
   // ── Monthly trend — last 12 calendar months (always uses all transactions)
   const trendData = useMemo(() => {
@@ -1551,17 +1505,6 @@ export function AnalyticsPage() {
                 )}
               </p>
             </div>
-            {recurringTemplates.length > 0 && (
-              <button
-                type="button"
-                onClick={handleApplyMonth}
-                disabled={applyingMonth}
-                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${applyingMonth ? "animate-spin" : ""}`} />
-                Aplicar este mes
-              </button>
-            )}
           </div>
 
           {/* Frequency filter chips */}
@@ -1587,24 +1530,6 @@ export function AnalyticsPage() {
               })}
             </div>
           )}
-
-          {/* Feedback banner */}
-          <AnimatePresence>
-            {appliedCount !== null && (
-              <motion.div
-                className="flex items-center gap-2 px-4 py-2.5 text-xs border-b border-primary/20 bg-primary/10 text-primary"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Check className="w-3.5 h-3.5 shrink-0" />
-                {appliedCount > 0
-                  ? `Se crearon ${appliedCount} transacción${appliedCount > 1 ? "es" : ""} este mes.`
-                  : "Todos los fijos ya están registrados este mes."}
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* Summary row when there are templates */}
           {recurringTemplates.length > 0 && totalRecurringArs > 0 && (

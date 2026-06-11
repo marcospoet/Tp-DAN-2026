@@ -226,7 +226,6 @@ export function DashboardPage() {
     prompts.push(transactions.some(t => t.currency === "USD")
       ? "¿Cuánto gasté en dólares este mes?"
       : "¿En qué categoría gasto más?")
-    prompts.push("Marcá el alquiler como recurrente")
     return prompts
   }, [transactions])
 
@@ -603,6 +602,7 @@ export function DashboardPage() {
           exchangeRateType: rateTypeForResult,
           observation: obs ?? result.observation,
           isRecurring: result.suggestRecurring === true,
+          recurringFrequency: result.suggestRecurring === true ? (result.recurringFrequency ?? "monthly") : undefined,
           account: detectedAccount,
         }, (msg) => {
           setAiError(msg)

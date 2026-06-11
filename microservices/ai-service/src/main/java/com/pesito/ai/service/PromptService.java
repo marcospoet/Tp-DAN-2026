@@ -22,6 +22,9 @@ public class PromptService {
             Si hay UNA sola transacción:
             {"type":"expense","description":"descripción corta máx 35 chars","amount":número,"category":"Comida","icon":"UtensilsCrossed","daysAgo":0,"suggestRecurring":false}
 
+            Si suggestRecurring es true, agregá también recurringFrequency (ver reglas abajo):
+            {"type":"expense","description":"Plan semanal comida","amount":30000,"category":"Comida","icon":"UtensilsCrossed","daysAgo":0,"suggestRecurring":true,"recurringFrequency":"weekly"}
+
             Si hay cuotas, agregá el campo observation (ver reglas abajo):
             {"type":"expense","description":"Celular","amount":20000,"category":"General","icon":"Tag","daysAgo":0,"suggestRecurring":false,"observation":"Cuota 1/6"}
 
@@ -71,6 +74,12 @@ public class PromptService {
             Campo suggestRecurring (boolean, SIEMPRE incluir):
             - true: alquiler, sueldo, cuota, préstamo, gym, streaming, Netflix, Spotify, suscripción mensual/anual, luz, gas, internet, agua
             - false: cualquier otro caso
+
+            Campo recurringFrequency (incluir SOLO si suggestRecurring es true):
+            - "weekly": el texto menciona "semanal", "por semana", "a la semana", "cada semana"
+            - "biweekly": el texto menciona "quincenal", "cada 15 días", "cada dos semanas", "quincena"
+            - "annual": el texto menciona "anual", "por año", "al año", "cada año", "anualmente"
+            - "monthly": cualquier otro caso (incluye "mensual", "por mes", "al mes", o si no se especifica frecuencia)
 
             Campo suggestedCurrency (incluir SOLO si se detecta explícitamente USD):
             - Incluir "USD" SOLO si el texto menciona: dólares, dolares, USD, usd, verdes, dls, us$, u$s, dollar, dollars
@@ -283,7 +292,7 @@ public class PromptService {
                 - search_financial_knowledge: busca en la base de conocimiento información sobre billeteras virtuales, bancos, AFIP/BCRA y educación financiera (comisiones, requisitos, regulaciones, conceptos).
 
                 Reglas de respuesta:
-                - Para preguntas rápidas que ya están resueltas en <datos_financieros> (gasto de hoy, top gastos del mes, proyección vs presupuesto), respondé directo con esos datos sin invocar tools.
+                - Para preguntas rápidas que ya están resueltas en <datos_financieros> (gasto de hoy, gastos de esta semana, top gastos del mes, proyección vs presupuesto), respondé directo con esos datos sin invocar tools. "Esta semana" = el campo "Gastos de esta semana (últimos 7 días, incluyendo hoy)"; el "Promedio diario de los 7 días previos a hoy" es solo un promedio de referencia y NO incluye los gastos de hoy.
                 - Si la pregunta pide datos que <datos_financieros> no cubre (otro mes, una cuenta o categoría específica, comparar meses, saldo por cuenta, cotización del dólar), invocá la tool correspondiente y respondé con el resultado exacto. Nunca inventés cifras.
                 - Si la pregunta es sobre productos, comisiones o regulaciones de bancos/billeteras/AFIP/BCRA (no sobre los datos del usuario), invocá search_financial_knowledge y respondé en base a los chunks devueltos, citando la fuente (ej: "según FAQ_UALA.md..."). Si no hay resultados relevantes, decilo en vez de inventar.
                 - Sé conciso: máximo 3-4 oraciones. Si la pregunta no es de finanzas, redirigilo amablemente.

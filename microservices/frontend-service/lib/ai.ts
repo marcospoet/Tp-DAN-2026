@@ -19,6 +19,7 @@ export interface ParsedTransaction {
   icon: string
   daysAgo?: number
   suggestRecurring?: boolean
+  recurringFrequency?: "weekly" | "biweekly" | "monthly" | "annual"
   suggestedCurrency?: "USD"
   suggestedExRateType?: "BLUE" | "OFICIAL" | "TARJETA" | "MEP"
   observation?: string
@@ -125,6 +126,14 @@ function validateOne(raw: ParsedTransaction): ParsedTransaction {
     raw.daysAgo <= 365
   ) ? raw.daysAgo : 0
   raw.suggestRecurring = raw.suggestRecurring === true
+  const VALID_FREQUENCIES = ["weekly", "biweekly", "monthly", "annual"]
+  if (raw.suggestRecurring && VALID_FREQUENCIES.includes(raw.recurringFrequency as string)) {
+    // keep as-is
+  } else if (raw.suggestRecurring) {
+    raw.recurringFrequency = "monthly"
+  } else {
+    delete raw.recurringFrequency
+  }
   if (raw.suggestedCurrency !== "USD") delete raw.suggestedCurrency
   const VALID_RATE_TYPES = ["BLUE", "OFICIAL", "TARJETA", "MEP"]
   if (!VALID_RATE_TYPES.includes(raw.suggestedExRateType as string)) delete raw.suggestedExRateType

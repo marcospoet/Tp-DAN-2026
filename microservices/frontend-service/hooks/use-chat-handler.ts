@@ -233,6 +233,7 @@ export function useChatHandler({
       .filter(t => { const d = new Date(t.date); return t.type === "expense" && d >= sevenDaysAgo && d < todayStart })
       .reduce((a, t) => a + toArs(t), 0)
     const dailyAvg7 = last7Exp / 7
+    const weekExp = last7Exp + todayExp
 
     const top3Month = [...monthTxs]
       .filter(t => t.type === "expense")
@@ -262,7 +263,8 @@ export function useChatHandler({
       `Ingresos mes: ${formatCurrency(sumIncome(monthTxs))}`,
       `Gastos mes: ${formatCurrency(monthExp)}`,
       `Proyección a fin de mes (ritmo actual): ${formatCurrency(projectionEOM)}`,
-      `Promedio diario últimos 7 días: ${formatCurrency(dailyAvg7)}`,
+      `Gastos de esta semana (últimos 7 días, incluyendo hoy): ${formatCurrency(weekExp)}`,
+      `Promedio diario de los 7 días previos a hoy (sin contar hoy): ${formatCurrency(dailyAvg7)}`,
       `Gasto de hoy: ${formatCurrency(todayExp)}`,
       todayUSDIncome > 0 ? `Ingreso de hoy en USD: USD ${todayUSDIncome.toLocaleString("es-AR", { maximumFractionDigits: 2 })}` : null,
       todayUSDExpense > 0 ? `Gasto de hoy en USD: USD ${todayUSDExpense.toLocaleString("es-AR", { maximumFractionDigits: 2 })}` : null,
@@ -568,6 +570,7 @@ export function useChatHandler({
               exchangeRateType: rateType2,
               observation: result.observation,
               isRecurring: result.suggestRecurring === true,
+              recurringFrequency: result.suggestRecurring === true ? (result.recurringFrequency ?? "monthly") : undefined,
               account: chatDetectedAccount,
             }, (msg) => { setChatMessages(prev => [...prev, { role: "bot", text: `⚠️ ${msg}` }]) })
             const arsAmt = curr2 === "USD" ? (result.amount * (rate2 ?? usdRate)) : result.amount
