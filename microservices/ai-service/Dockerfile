@@ -27,4 +27,4 @@ COPY --from=builder /workspace/ai-service/target/*.jar app.jar
 
 EXPOSE 8083
 
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xms256m", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

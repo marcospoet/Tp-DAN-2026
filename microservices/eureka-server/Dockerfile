@@ -32,4 +32,4 @@ COPY --from=builder /workspace/eureka-server/target/*.jar app.jar
 
 EXPOSE 8761
 
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xms128m", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
