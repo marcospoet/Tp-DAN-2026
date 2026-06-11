@@ -115,12 +115,9 @@ public class AuthServiceImpl implements IAuthService {
         if (request.exchangeRateMode() != null)  p.setExchangeRateMode(request.exchangeRateMode());
         if (request.usdRate() != null)           p.setUsdRate(request.usdRate());
         if (request.aiProvider() != null)        p.setAiProvider(request.aiProvider());
-        if (request.apiKeyClaude() != null)
-            p.setApiKeyClaude(request.apiKeyClaude().isBlank() ? null : request.apiKeyClaude());
-        if (request.apiKeyOpenai() != null)
-            p.setApiKeyOpenai(request.apiKeyOpenai().isBlank() ? null : request.apiKeyOpenai());
-        if (request.apiKeyGemini() != null)
-            p.setApiKeyGemini(request.apiKeyGemini().isBlank() ? null : request.apiKeyGemini());
+        applyApiKey(request.apiKeyClaude(), p::getApiKeyClaude, p::setApiKeyClaude);
+        applyApiKey(request.apiKeyOpenai(), p::getApiKeyOpenai, p::setApiKeyOpenai);
+        applyApiKey(request.apiKeyGemini(), p::getApiKeyGemini, p::setApiKeyGemini);
         if (request.defaultAccount() != null)    p.setDefaultAccount(request.defaultAccount());
         if (request.defaultExRateType() != null) p.setDefaultExRateType(request.defaultExRateType());
 
@@ -211,5 +208,17 @@ public class AuthServiceImpl implements IAuthService {
         if (key == null || key.isBlank()) return null;
         if (key.length() <= 8) return "****";
         return key.substring(0, 4) + "...****" + key.substring(key.length() - 4);
+    }
+
+    /**
+     * Aplica un nuevo valor de API key, ignorando el caso en que el cliente reenvía
+     * sin cambios el valor enmascarado que recibió de toProfileResponse (evita
+     * sobrescribir la key real cifrada con su propio placeholder enmascarado).
+     */
+    private void applyApiKey(String incoming, java.util.function.Supplier<String> getter, java.util.function.Consumer<String> setter) {
+        if (incoming == null) return;
+        if (incoming.isBlank()) { setter.accept(null); return; }
+        if (incoming.equals(maskApiKey(getter.get()))) return;
+        setter.accept(incoming);
     }
 }

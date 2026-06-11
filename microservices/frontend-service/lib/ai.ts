@@ -196,7 +196,7 @@ function translateError(msg: string): string {
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 
-async function postToAiService<T>(path: string, body: object, provider?: string, apiKey?: string): Promise<T> {
+async function postToAiService<T>(path: string, body: object, provider?: string): Promise<T> {
   const token = getToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -207,7 +207,6 @@ async function postToAiService<T>(path: string, body: object, provider?: string,
     body: JSON.stringify({
       ...body,
       ...(provider ? { provider } : {}),
-      ...(apiKey ? { apiKey } : {}),
     }),
   })
   if (!res.ok) {
@@ -225,7 +224,6 @@ async function postToAiService<T>(path: string, body: object, provider?: string,
  */
 export async function callAI(
   provider: unknown,
-  apiKey: unknown,
   input: string,
   attachments?: AIAttachment[]
 ): Promise<ParsedTransaction | ParsedTransaction[]> {
@@ -243,7 +241,7 @@ export async function callAI(
       fileBase64: fileAttachment?.base64 ?? null,
       fileMimeType: fileAttachment?.mimeType ?? null,
       todayDate: today,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     return extractAndValidate(data.rawResponse)
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido."
@@ -257,7 +255,6 @@ export async function callAI(
  */
 export async function callAIChat(
   provider: unknown,
-  apiKey: unknown,
   context: string,
   history: ChatTurn[],
   _audioAttachment?: AIAttachment
@@ -272,7 +269,7 @@ export async function callAIChat(
       message: safeHistory[safeHistory.length - 1]?.text ?? "",
       financialContext: context,
       history: safeHistory,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     return data.reply
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido."
@@ -285,7 +282,6 @@ export async function callAIChat(
  */
 export async function callAIUpdateDetect(
   provider: unknown,
-  apiKey: unknown,
   message: string
 ): Promise<ParsedUpdate> {
   const today = new Date().toISOString().split("T")[0]
@@ -295,7 +291,7 @@ export async function callAIUpdateDetect(
       message: safeMsg,
       intentType: "update",
       todayDate: today,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     const raw = data.rawResponse
     const matchBase = parseAIMatch(raw)
     if (!matchBase) return { match: null, updates: {} }
@@ -329,7 +325,6 @@ export async function callAIUpdateDetect(
  */
 export async function callAIDeleteDetect(
   provider: unknown,
-  apiKey: unknown,
   message: string
 ): Promise<ParsedDelete> {
   const today = new Date().toISOString().split("T")[0]
@@ -339,7 +334,7 @@ export async function callAIDeleteDetect(
       message: safeMsg,
       intentType: "delete",
       todayDate: today,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     const match = parseAIMatch(data.rawResponse)
     return { match }
   } catch {
@@ -352,7 +347,6 @@ export async function callAIDeleteDetect(
  */
 export async function callAIRecurringDetect(
   provider: unknown,
-  apiKey: unknown,
   message: string
 ): Promise<ParsedRecurring> {
   const today = new Date().toISOString().split("T")[0]
@@ -362,7 +356,7 @@ export async function callAIRecurringDetect(
       message: safeMsg,
       intentType: "recurring",
       todayDate: today,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     const raw = data.rawResponse
     const match = parseAIMatch(raw)
     if (!match) return { match: null, recurring: false }
@@ -380,7 +374,6 @@ export async function callAIRecurringDetect(
  */
 export async function callAICSVMapping(
   provider: unknown,
-  apiKey: unknown,
   headers: string[],
   sampleRows: string[][]
 ): Promise<CSVMapping | null> {
@@ -388,7 +381,7 @@ export async function callAICSVMapping(
     const data = await postToAiService<{ rawResponse: string }>("/csv-mapping", {
       headers,
       sampleRows,
-    }, provider as string, apiKey as string)
+    }, provider as string)
     const m = data.rawResponse.match(/\{[\s\S]*\}/)
     if (!m) return null
     const p = JSON.parse(m[0])
@@ -412,15 +405,13 @@ export async function callAICSVMapping(
  */
 export async function transcribeAudioAttachment(
   provider: unknown,
-  apiKey: unknown,
   attachment: AIAttachment
 ): Promise<string | null> {
   try {
     const data = await postToAiService<{ transcription: string }>(
       "/transcribe",
       { audioBase64: attachment.base64, mimeType: attachment.mimeType },
-      provider as string,
-      apiKey as string
+      provider as string
     )
     return data.transcription?.trim() || null
   } catch {

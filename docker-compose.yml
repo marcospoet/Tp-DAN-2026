@@ -154,6 +154,7 @@ services:
       AUTH_DB_USER: ${AUTH_DB_USER}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -240,6 +241,8 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_HOST: eureka-server
       TRANSACTION_HOST: transaction-service
+      AUTH_HOST: auth-service
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       SPRING_PROFILES_ACTIVE: docker
       # PostgreSQL (pgvector) — knowledge base de RAG
       POSTGRES_HOST: postgres

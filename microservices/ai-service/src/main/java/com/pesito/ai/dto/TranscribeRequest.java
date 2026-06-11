@@ -5,7 +5,6 @@ public class TranscribeRequest {
     private String audioBase64;
     private String mimeType = "audio/webm";
     private String provider;
-    private String apiKey;
 
     public String getAudioBase64() { return audioBase64; }
     public void setAudioBase64(String audioBase64) { this.audioBase64 = audioBase64; }
@@ -15,7 +14,4 @@ public class TranscribeRequest {
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
-
-    public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 }

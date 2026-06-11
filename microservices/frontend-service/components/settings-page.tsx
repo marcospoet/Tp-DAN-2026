@@ -694,7 +694,7 @@ export function SettingsPage() {
                   /* Masked display when key is saved */
                   <div className="flex items-center gap-2 h-11 px-3 rounded-lg bg-secondary/50 border border-border overflow-hidden">
                     <span className="flex-1 min-w-0 font-mono text-sm text-foreground truncate">
-                      {displayedKey.slice(0, 12)}{"•".repeat(10)}
+                      {displayedKey}
                     </span>
                     <button
                       type="button"

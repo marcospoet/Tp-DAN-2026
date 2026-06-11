@@ -13,8 +13,8 @@ import java.util.List;
 
 /**
  * Ejecuta la tool search_financial_knowledge (RAG sobre pgvector).
- * Los embeddings siempre usan OpenAI text-embedding-3-small: si el chat usa
- * provider=openai con apiKey propia, se reusa esa key; en cualquier otro caso
+ * Los embeddings siempre usan OpenAI text-embedding-3-small: si el usuario tiene
+ * configurada su propia API key de OpenAI se reusa esa key; en cualquier otro caso
  * se usa OPENAI_API_KEY server-side como fallback.
  */
 @Service
@@ -32,15 +32,15 @@ public class RagToolService {
         this.mapper = mapper;
     }
 
-    public String execute(ToolCall call, String provider, String apiKey) {
+    public String execute(ToolCall call, String provider, String apiKey, String userOpenAiKey) {
         try {
             String query = call.arguments() != null ? call.arguments().path("query").asText("") : "";
             if (query.isBlank()) {
                 return errorJson("Falta el parámetro 'query'.");
             }
 
-            String embeddingKey = "openai".equalsIgnoreCase(provider) && apiKey != null && !apiKey.isBlank()
-                    ? apiKey
+            String embeddingKey = (userOpenAiKey != null && !userOpenAiKey.isBlank())
+                    ? userOpenAiKey
                     : aiProperties.getOpenaiApiKey();
             if (embeddingKey == null || embeddingKey.isBlank()) {
                 return errorJson("RAG requiere una API key de OpenAI (configurada en el servidor o provista por el usuario con provider=openai).");

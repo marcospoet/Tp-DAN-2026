@@ -290,7 +290,7 @@ export function ImportCsvModal({ open, onClose }: ImportCsvModalProps) {
     if (!apiKey?.trim()) { toast.error("Configurá tu API key en Configuración para usar la detección automática."); return }
     setAiLoading(true)
     try {
-      const result = await callAICSVMapping(aiProvider, apiKey, headers, rows.slice(0, 3))
+      const result = await callAICSVMapping(aiProvider, headers, rows.slice(0, 3))
       if (!result) { toast.error("La IA no pudo identificar las columnas. Mapeá manualmente."); return }
       setMapping(m => ({
         ...m,

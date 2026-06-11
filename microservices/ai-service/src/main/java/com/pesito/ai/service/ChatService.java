@@ -38,10 +38,10 @@ public class ChatService {
     }
 
     public ChatResponse chat(ChatRequest req) {
-        return chat(req, null, null);
+        return chat(req, null, null, null);
     }
 
-    public ChatResponse chat(ChatRequest req, String providerOverride, String apiKeyOverride) {
+    public ChatResponse chat(ChatRequest req, String providerOverride, String apiKeyOverride, String userOpenAiKey) {
         String userId = req.getUserId() != null ? req.getUserId() : "anonymous";
 
         // Load or create session
@@ -62,7 +62,7 @@ public class ChatService {
 
         // Call AI — agentic loop with tools when enabled, plain chat otherwise
         String reply = aiProperties.isToolsEnabled()
-                ? toolExecutor.runAgentLoop(userId, systemPrompt, history, providerOverride, apiKeyOverride)
+                ? toolExecutor.runAgentLoop(userId, systemPrompt, history, providerOverride, apiKeyOverride, userOpenAiKey)
                 : aiProvider.callChat(systemPrompt, history, providerOverride, apiKeyOverride);
 
         // Persist the new exchange

@@ -17,11 +17,13 @@ No persiste transacciones directamente: devuelve el resultado parseado al client
 
 - Spring Boot 3.x
 - Spring Data MongoDB
-- MongoDB (colecciones propias, sin acceso a PostgreSQL)
+- MongoDB (colecciones propias: chat_sessions, analytics_cache)
+- PostgreSQL (schema `ai`, vía Spring Data JDBC + Flyway) — exclusivo para RAG/pgvector
 - Spring Cloud Netflix Eureka Client
 - Spring Boot Actuator + Micrometer
 - Spring AMQP (RabbitMQ)
 - WebClient (para llamadas a APIs externas: Anthropic, OpenAI, Google)
+- Apache PDFBox (extracción de texto de PDFs para la knowledge base RAG)
 - Puerto: `8083`
 
 ---
@@ -45,6 +47,19 @@ No persiste transacciones directamente: devuelve el resultado parseado al client
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-validation</artifactId>
 </dependency>
+
+<!-- PDF rendering / extracción de texto (vision + RAG) -->
+<dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox</artifactId>
+    <version>3.0.1</version>
+</dependency>
+
+<!-- RAG — pgvector (PostgreSQL), schema "ai" -->
+<dependency>spring-boot-starter-jdbc</dependency>
+<dependency>org.postgresql:postgresql</dependency>      <!-- runtime -->
+<dependency>org.flywaydb:flyway-core</dependency>
+<dependency>com.pgvector:pgvector:0.1.6</dependency>
 ```
 
 ---
@@ -68,6 +83,14 @@ spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
 
 # Eureka
 eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
+
+# RAG — pgvector (PostgreSQL), schema "ai"
+# Knowledge base estática (Markdown/PDF) indexada bajo demanda
+spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}?currentSchema=ai,public
+spring.datasource.username=${AI_DB_USER:ai_db_user}
+spring.datasource.password=${AI_DB_PASSWORD:ai_pass}
+spring.flyway.schemas=ai
+spring.flyway.default-schema=ai
 
 # Actuator
 management.endpoints.web.exposure.include=health,info,prometheus
@@ -162,6 +185,66 @@ Cuando el usuario envía un mensaje al chat, ai-service construye un contexto qu
 ```
 
 Este contexto se envía al LLM como system prompt, junto con el historial de la conversación.
+
+---
+
+## RAG — Knowledge base financiera (search_financial_knowledge)
+
+Además de las tools sobre datos del usuario, el agente cuenta con la tool
+`search_financial_knowledge(query)`, que hace búsqueda semántica sobre una
+knowledge base estática de entidades financieras argentinas (Mercado Pago,
+Ualá, Brubank, Naranja X, AFIP/BCRA, educación financiera) usando **pgvector**.
+
+### Archivos fuente
+
+```
+src/main/resources/knowledge-base/
+├── markdown/   ← FAQ_MERCADOPAGO.md, FAQ_UALA.md, FAQ_BRUBANK.md,
+│                 FAQ_NARANJAX.md, EDUCACION_FINANCIERA.md, AFIP_BCRA.md
+└── pdf/        ← vacío (.gitkeep); soportado vía Apache PDFBox
+```
+
+### Indexado perezoso (lazy)
+
+No hay indexado al *startup*. Cada vez que el agente invoca
+`search_financial_knowledge`, `RagService.ensureIndexed()`:
+
+1. Lee los archivos de `knowledge-base/` (`KnowledgeBaseLoader`).
+2. Calcula el hash MD5 de cada archivo y lo compara contra
+   `ai.knowledge_sources.content_hash`.
+3. Si cambió (o es nuevo): borra los chunks anteriores, lo divide en chunks
+   de ~500 palabras con solapamiento de ~50 (`TextChunker`), genera los
+   embeddings (`EmbeddingService`, OpenAI `text-embedding-3-small`,
+   1536 dims) y los inserta en `ai.knowledge_chunks` (`KnowledgeChunkRepository`,
+   vía `com.pgvector.PGvector`).
+4. Si no cambió: no hace nada.
+
+Luego embebe la query y busca los 5 chunks más similares por cosine
+similarity (`embedding <=> query_vector`).
+
+### API key para embeddings
+
+RAG necesita una API key de **OpenAI** para generar embeddings,
+independientemente del proveedor de LLM elegido para el chat:
+
+- `provider=openai` con `apiKey` del usuario → se usa esa key.
+- Cualquier otro caso (Claude, Gemini, o sin key de OpenAI) → se usa
+  `OPENAI_API_KEY` configurada server-side como fallback.
+- Si ninguna está disponible, la tool devuelve
+  `{"error": "RAG requiere una API key de OpenAI..."}` y el LLM se lo informa
+  al usuario en vez de inventar una respuesta.
+
+### Esquema (Flyway, schema `ai`)
+
+```sql
+ai.knowledge_sources (source PK, content_hash, indexed_at)
+ai.knowledge_chunks  (id, source, chunk_index, content, embedding vector(1536))
+```
+
+El usuario `ai_db_user` solo tiene permisos sobre el schema `ai` (no accede a
+`auth`/`txn`). La extensión `vector` se compila desde fuente en la imagen
+custom de `infrastructure/postgres/Dockerfile` (pgvector v0.7.4 sobre
+`postgres:16-alpine`).
 
 ---
 
