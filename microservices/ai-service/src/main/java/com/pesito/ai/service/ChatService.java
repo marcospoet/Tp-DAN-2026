@@ -1,5 +1,6 @@
 package com.pesito.ai.service;
 
+import com.pesito.ai.config.AiProperties;
 import com.pesito.ai.dto.ChatRequest;
 import com.pesito.ai.dto.ChatResponse;
 import com.pesito.ai.dto.ChatTurnDto;
@@ -21,13 +22,19 @@ public class ChatService {
     private final ChatSessionRepository sessionRepo;
     private final AiProviderService aiProvider;
     private final PromptService prompts;
+    private final ToolExecutorService toolExecutor;
+    private final AiProperties aiProperties;
 
     public ChatService(ChatSessionRepository sessionRepo,
                        AiProviderService aiProvider,
-                       PromptService prompts) {
+                       PromptService prompts,
+                       ToolExecutorService toolExecutor,
+                       AiProperties aiProperties) {
         this.sessionRepo = sessionRepo;
         this.aiProvider = aiProvider;
         this.prompts = prompts;
+        this.toolExecutor = toolExecutor;
+        this.aiProperties = aiProperties;
     }
 
     public ChatResponse chat(ChatRequest req) {
@@ -53,8 +60,10 @@ public class ChatService {
         // Build system prompt with financial context
         String systemPrompt = prompts.buildChatSystemPrompt(req.getFinancialContext());
 
-        // Call AI with optional provider/key overrides
-        String reply = aiProvider.callChat(systemPrompt, history, providerOverride, apiKeyOverride);
+        // Call AI — agentic loop with tools when enabled, plain chat otherwise
+        String reply = aiProperties.isToolsEnabled()
+                ? toolExecutor.runAgentLoop(userId, systemPrompt, history, providerOverride, apiKeyOverride)
+                : aiProvider.callChat(systemPrompt, history, providerOverride, apiKeyOverride);
 
         // Persist the new exchange
         session.addMessage(new ChatMessage("user", req.getMessage()));

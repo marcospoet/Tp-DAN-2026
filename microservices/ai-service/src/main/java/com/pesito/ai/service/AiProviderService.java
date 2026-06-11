@@ -2,6 +2,9 @@ package com.pesito.ai.service;
 
 import com.pesito.ai.config.AiProperties;
 import com.pesito.ai.dto.ChatTurnDto;
+import com.pesito.ai.tool.AgentTurnResult;
+import com.pesito.ai.tool.ToolCall;
+import com.pesito.ai.tool.ToolDefinition;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,6 +26,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 
@@ -50,11 +54,11 @@ public class AiProviderService {
 
     // ── Provider / key resolution ─────────────────────────────────────────────
 
-    private String resolveProvider(String override) {
+    String resolveProvider(String override) {
         return (override != null && !override.isBlank()) ? override.toLowerCase() : props.getProvider().toLowerCase();
     }
 
-    private String resolveKey(String provider, String override) {
+    String resolveKey(String provider, String override) {
         if (override != null && !override.isBlank()) return override;
         return switch (provider) {
             case "openai" -> props.getOpenaiApiKey();
@@ -122,6 +126,265 @@ public class AiProviderService {
             case "gemini" -> callGeminiChat(systemPrompt, history, k);
             default -> callClaudeChat(systemPrompt, history, k);
         };
+    }
+
+    // ── Tool calling (agentic loop) ─────────────────────────────────────────────
+
+    /**
+     * Converts plain chat history into the provider-native message format used
+     * as the starting point of the tool-calling conversation.
+     */
+    public ArrayNode buildInitialMessages(String provider, List<ChatTurnDto> history) {
+        ArrayNode messages = mapper.createArrayNode();
+        boolean gemini = "gemini".equals(provider);
+        for (ChatTurnDto turn : history) {
+            String text = turn.getText() != null ? turn.getText() : "";
+            ObjectNode msg = mapper.createObjectNode();
+            if (gemini) {
+                msg.put("role", "assistant".equals(turn.getRole()) ? "model" : "user");
+                msg.putArray("parts").addObject().put("text", text);
+            } else {
+                msg.put("role", turn.getRole());
+                msg.put("content", text);
+            }
+            messages.add(msg);
+        }
+        return messages;
+    }
+
+    /**
+     * Sends one turn of the agentic conversation, including tool definitions, and
+     * returns the assistant's reply parsed into text and/or tool calls.
+     */
+    public AgentTurnResult sendAgentTurn(String provider, String systemPrompt, ArrayNode messages,
+                                          List<ToolDefinition> tools, String apiKey) {
+        return switch (provider) {
+            case "openai" -> sendOpenAiAgentTurn(systemPrompt, messages, tools, apiKey);
+            case "gemini" -> sendGeminiAgentTurn(systemPrompt, messages, tools, apiKey);
+            default -> sendClaudeAgentTurn(systemPrompt, messages, tools, apiKey);
+        };
+    }
+
+    /**
+     * Appends the results of executed tool calls to the conversation, in the
+     * format expected by each provider for the next turn.
+     */
+    public void appendToolResults(String provider, ArrayNode messages, List<ToolCall> calls, List<String> results) {
+        switch (provider) {
+            case "openai" -> {
+                for (int i = 0; i < calls.size(); i++) {
+                    ObjectNode toolMsg = mapper.createObjectNode();
+                    toolMsg.put("role", "tool");
+                    toolMsg.put("tool_call_id", calls.get(i).id());
+                    toolMsg.put("content", results.get(i));
+                    messages.add(toolMsg);
+                }
+            }
+            case "gemini" -> {
+                ObjectNode userMsg = mapper.createObjectNode();
+                userMsg.put("role", "user");
+                ArrayNode parts = userMsg.putArray("parts");
+                for (int i = 0; i < calls.size(); i++) {
+                    ObjectNode part = parts.addObject();
+                    ObjectNode functionResponse = part.putObject("functionResponse");
+                    functionResponse.put("name", calls.get(i).name());
+                    ObjectNode responseObj = functionResponse.putObject("response");
+                    try {
+                        responseObj.set("content", mapper.readTree(results.get(i)));
+                    } catch (Exception e) {
+                        responseObj.put("content", results.get(i));
+                    }
+                }
+                messages.add(userMsg);
+            }
+            default -> {
+                ObjectNode userMsg = mapper.createObjectNode();
+                userMsg.put("role", "user");
+                ArrayNode content = userMsg.putArray("content");
+                for (int i = 0; i < calls.size(); i++) {
+                    ObjectNode block = content.addObject();
+                    block.put("type", "tool_result");
+                    block.put("tool_use_id", calls.get(i).id());
+                    block.put("content", results.get(i));
+                }
+                messages.add(userMsg);
+            }
+        }
+    }
+
+    private AgentTurnResult sendClaudeAgentTurn(String systemPrompt, ArrayNode messages,
+                                                 List<ToolDefinition> tools, String apiKey) {
+        try {
+            ObjectNode body = mapper.createObjectNode();
+            body.put("model", "claude-3-5-haiku-20241022");
+            body.put("max_tokens", 1024);
+            body.put("system", systemPrompt);
+            body.set("messages", messages);
+            body.set("tools", buildClaudeTools(tools));
+
+            String response = webClient.post()
+                    .uri(CLAUDE_URL)
+                    .header("x-api-key", apiKey)
+                    .header("anthropic-version", "2023-06-01")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body.toString())
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JsonNode json = mapper.readTree(response);
+            JsonNode content = json.path("content");
+
+            StringBuilder text = new StringBuilder();
+            List<ToolCall> toolCalls = new ArrayList<>();
+            for (JsonNode block : content) {
+                String type = block.path("type").asText();
+                if ("text".equals(type)) {
+                    text.append(block.path("text").asText());
+                } else if ("tool_use".equals(type)) {
+                    toolCalls.add(new ToolCall(block.path("id").asText(), block.path("name").asText(), block.path("input")));
+                }
+            }
+
+            ObjectNode assistantMessage = mapper.createObjectNode();
+            assistantMessage.put("role", "assistant");
+            assistantMessage.set("content", content);
+
+            return new AgentTurnResult(text.toString(), toolCalls, assistantMessage);
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Error Claude (tools) " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new RuntimeException("Error llamando a Claude (tools): " + e.getMessage());
+        }
+    }
+
+    private ArrayNode buildClaudeTools(List<ToolDefinition> tools) {
+        ArrayNode arr = mapper.createArrayNode();
+        for (ToolDefinition tool : tools) {
+            ObjectNode node = arr.addObject();
+            node.put("name", tool.name());
+            node.put("description", tool.description());
+            node.set("input_schema", tool.parameters());
+        }
+        return arr;
+    }
+
+    private AgentTurnResult sendOpenAiAgentTurn(String systemPrompt, ArrayNode messages,
+                                                 List<ToolDefinition> tools, String apiKey) {
+        try {
+            ObjectNode body = mapper.createObjectNode();
+            body.put("model", "gpt-4o-mini");
+            body.put("max_tokens", 1024);
+            body.put("temperature", 0.2);
+
+            ArrayNode allMessages = mapper.createArrayNode();
+            ObjectNode sysMsg = mapper.createObjectNode();
+            sysMsg.put("role", "system");
+            sysMsg.put("content", systemPrompt);
+            allMessages.add(sysMsg);
+            allMessages.addAll(messages);
+            body.set("messages", allMessages);
+            body.set("tools", buildOpenAiTools(tools));
+
+            String response = webClient.post()
+                    .uri(OPENAI_URL)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body.toString())
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JsonNode json = mapper.readTree(response);
+            JsonNode message = json.path("choices").get(0).path("message");
+
+            String text = (message.hasNonNull("content")) ? message.path("content").asText() : "";
+
+            List<ToolCall> toolCalls = new ArrayList<>();
+            for (JsonNode tc : message.path("tool_calls")) {
+                String argsStr = tc.path("function").path("arguments").asText("{}");
+                JsonNode args = mapper.readTree(argsStr.isBlank() ? "{}" : argsStr);
+                toolCalls.add(new ToolCall(tc.path("id").asText(), tc.path("function").path("name").asText(), args));
+            }
+
+            return new AgentTurnResult(text, toolCalls, message);
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Error OpenAI (tools) " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new RuntimeException("Error llamando a OpenAI (tools): " + e.getMessage());
+        }
+    }
+
+    private ArrayNode buildOpenAiTools(List<ToolDefinition> tools) {
+        ArrayNode arr = mapper.createArrayNode();
+        for (ToolDefinition tool : tools) {
+            ObjectNode node = arr.addObject();
+            node.put("type", "function");
+            ObjectNode function = node.putObject("function");
+            function.put("name", tool.name());
+            function.put("description", tool.description());
+            function.set("parameters", tool.parameters());
+        }
+        return arr;
+    }
+
+    private AgentTurnResult sendGeminiAgentTurn(String systemPrompt, ArrayNode messages,
+                                                 List<ToolDefinition> tools, String apiKey) {
+        try {
+            ObjectNode body = mapper.createObjectNode();
+
+            ObjectNode systemInstruction = mapper.createObjectNode();
+            systemInstruction.putArray("parts").addObject().put("text", systemPrompt);
+            body.set("system_instruction", systemInstruction);
+
+            body.set("contents", messages);
+
+            ArrayNode toolsArr = body.putArray("tools");
+            ArrayNode declarations = toolsArr.addObject().putArray("function_declarations");
+            for (ToolDefinition tool : tools) {
+                ObjectNode decl = declarations.addObject();
+                decl.put("name", tool.name());
+                decl.put("description", tool.description());
+                decl.set("parameters", tool.parameters());
+            }
+
+            ObjectNode genConfig = mapper.createObjectNode();
+            genConfig.put("maxOutputTokens", 1024);
+            genConfig.put("temperature", 0.2);
+            body.set("generationConfig", genConfig);
+
+            String response = webClient.post()
+                    .uri(GEMINI_URL + "?key=" + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body.toString())
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JsonNode json = mapper.readTree(response);
+            JsonNode parts = json.path("candidates").get(0).path("content").path("parts");
+
+            StringBuilder text = new StringBuilder();
+            List<ToolCall> toolCalls = new ArrayList<>();
+            for (JsonNode part : parts) {
+                if (part.has("text")) {
+                    text.append(part.path("text").asText());
+                } else if (part.has("functionCall")) {
+                    JsonNode fc = part.path("functionCall");
+                    toolCalls.add(new ToolCall(null, fc.path("name").asText(), fc.path("args")));
+                }
+            }
+
+            ObjectNode assistantMessage = mapper.createObjectNode();
+            assistantMessage.put("role", "model");
+            assistantMessage.set("parts", parts);
+
+            return new AgentTurnResult(text.toString(), toolCalls, assistantMessage);
+        } catch (WebClientResponseException e) {
+            throw new RuntimeException("Error Gemini (tools) " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new RuntimeException("Error llamando a Gemini (tools): " + e.getMessage());
+        }
     }
 
     // ── Claude ────────────────────────────────────────────────────────────────

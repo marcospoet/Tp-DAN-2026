@@ -237,6 +237,7 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       EUREKA_HOST: eureka-server
+      TRANSACTION_HOST: transaction-service
       SPRING_PROFILES_ACTIVE: docker
       # AI provider config — server-side API keys
       AI_PROVIDER: ${AI_PROVIDER:-claude}
@@ -253,6 +254,8 @@ services:
       rabbitmq:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      transaction-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]

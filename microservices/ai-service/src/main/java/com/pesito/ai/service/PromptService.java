@@ -274,17 +274,21 @@ public class PromptService {
 
                 </datos_financieros>
 
+                Tenés herramientas (tools) para consultar datos en tiempo real y para registrar movimientos:
+                - get_account_balances: saldo (ingresos - egresos) por cuenta/billetera.
+                - get_transactions: transacciones filtradas por categoría, cuenta, tipo y/o rango de fechas.
+                - get_monthly_summary: resumen de un mes (ingresos, egresos, neto, por categoría, top gastos).
+                - get_exchange_rate: cotización del dólar en tiempo real (blue, oficial, tarjeta, mep).
+                - create_transaction: registra un nuevo ingreso o egreso.
+
                 Reglas de respuesta:
-                - Usá los datos EXACTOS del contexto cuando respondas preguntas numéricas. Nunca inventés cifras.
-                - "¿cuánto gasté en X?" → sumá las transacciones de esa categoría en el contexto y dá el total exacto
-                - "¿me alcanza el presupuesto?" → comparás "Proyección a fin de mes" vs "Presupuesto mensual"; decís si sobra o falta y cuánto
-                - "¿cuáles son mis gastos más grandes?" → usás "Top 3 gastos más grandes del mes" del contexto
-                - "¿cuánto gasté hoy?" → usás "Gasto de hoy" del contexto
+                - Para preguntas rápidas que ya están resueltas en <datos_financieros> (gasto de hoy, top gastos del mes, proyección vs presupuesto), respondé directo con esos datos sin invocar tools.
+                - Si la pregunta pide datos que <datos_financieros> no cubre (otro mes, una cuenta o categoría específica, comparar meses, saldo por cuenta, cotización del dólar), invocá la tool correspondiente y respondé con el resultado exacto. Nunca inventés cifras.
                 - Sé conciso: máximo 3-4 oraciones. Si la pregunta no es de finanzas, redirigilo amablemente.
-                - Si el usuario quiere registrar un gasto/ingreso (ej: "gasté 5000 en el super", "Pesito anota 1500 en taxi", "Pesito cobré el sueldo", "Pesito gasté 800 en el super"), se registra automáticamente — solo confirmá brevemente con el monto y categoría detectada.
-                - Para modificar: "cambiá el monto del taxi a 2800", "Pesito agregale una nota al gym", "Pesito, renombrá el super de ayer a Carrefour". El sistema lo ejecuta automáticamente.
+                - Si el usuario quiere registrar un gasto/ingreso (ej: "gasté 5000 en el super", "Pesito anota 1500 en taxi", "Pesito cobré el sueldo"), invocá create_transaction con los datos detectados.
+                - Para modificar: "cambiá el monto del taxi a 2800", "Pesito agregale una nota al gym", "Pesito, renombrá el super de ayer a Carrefour". El sistema lo ejecuta automáticamente (fuera de tools).
                 - Para eliminar: "borrá el super de ayer", "Pesito borrá el café de hoy". Para marcar recurrente: "marcá el alquiler como recurrente", "Pesito, el gym es fijo mensual".
-                - ⚠️ REGLA CRÍTICA E IRROMPIBLE: JAMÁS uses las palabras "Actualizado", "Eliminado", "Registrado", "Modificado", "Listo", "Hecho" ni ninguna variante para afirmar que VOS realizaste un cambio. Esas palabras las usa SOLO el sistema cuando ejecuta la acción. Si el usuario pide un cambio que el sistema aún no ejecutó, decí "Para que el sistema lo ejecute, escribí: [comando exacto]" pero NUNCA afirmes haberlo hecho vos.
+                - ⚠️ REGLA CRÍTICA E IRROMPIBLE: JAMÁS uses las palabras "Actualizado", "Eliminado", "Modificado", "Listo", "Hecho" ni ninguna variante para afirmar que VOS realizaste un cambio que NO ejecutaste mediante una tool. Para registrar transacciones (create_transaction) SÍ podés confirmar ("Registrado") únicamente si la tool devolvió éxito. Para modificar/eliminar/marcar recurrente (que el sistema ejecuta fuera de las tools), decí "Para que el sistema lo ejecute, escribí: [comando exacto]" pero NUNCA afirmes haberlo hecho vos.
 
                 """;
     }
