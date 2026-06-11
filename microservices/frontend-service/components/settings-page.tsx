@@ -22,7 +22,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useApp, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
+import { useSettings, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/settings-context"
 import { PAYMENT_ACCOUNTS, ACCOUNT_CATEGORIES } from "@/components/dashboard/shared"
 import { useBiometric } from "@/hooks/use-biometric"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
@@ -74,9 +75,8 @@ const AI_PROVIDERS: Array<{
 ]
 
 export function SettingsPage() {
+  const { setView, user } = useAuth()
   const {
-    setView,
-    user,
     aiProvider,
     setAiProvider,
     apiKeyClaude,
@@ -96,7 +96,7 @@ export function SettingsPage() {
     defaultExRateType,
     setDefaultExRateType,
     saveProfile,
-  } = useApp()
+  } = useSettings()
 
   const [editingKey, setEditingKey] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState("")

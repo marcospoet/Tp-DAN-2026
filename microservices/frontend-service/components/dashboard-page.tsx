@@ -7,7 +7,9 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useApp, type TimeFilter, type ExchangeRateType, type RecurringFrequency } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
+import { useTransactions, type RecurringFrequency } from "@/lib/transactions-context"
+import { useSettings, type TimeFilter, type ExchangeRateType } from "@/lib/settings-context"
 import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
 import { getToken } from "@/lib/api-client"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
@@ -72,15 +74,20 @@ function generateRetroactiveDates(startDate: Date, freq: RecurringFrequency): Da
 }
 
 export function DashboardPage() {
+  const { user, setView, signOut } = useAuth()
   const {
-    user,
     transactions,
     addTransaction,
     patchTransactionReceiptUrl,
     deleteTransaction,
     updateTransaction,
-    setView,
-    signOut,
+    isOnline,
+    pendingOfflineCount,
+    isLoadingHistory,
+    hasMoreTransactions,
+    loadMoreTransactions,
+  } = useTransactions()
+  const {
     userName,
     defaultAccount,
     usdRate,
@@ -91,13 +98,8 @@ export function DashboardPage() {
     setTimeFilter,
     customRange,
     setCustomRange,
-    isOnline,
-    pendingOfflineCount,
-    isLoadingHistory,
-    hasMoreTransactions,
-    loadMoreTransactions,
     defaultExRateType,
-  } = useApp()
+  } = useSettings()
 
   // ── Magic Bar state ──────────────────────────────────────────────────────────
   const [magicInput, setMagicInput] = useState("")

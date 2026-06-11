@@ -41,7 +41,9 @@ import {
   BarChart,
   Bar,
 } from "recharts"
-import { useApp } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
+import { useTransactions } from "@/lib/transactions-context"
+import { useSettings } from "@/lib/settings-context"
 import type { Transaction, TimeFilter } from "@/lib/app-context"
 import { CalendarWithNav } from "@/components/ui/calendar"
 import type { DateRange } from "react-day-picker"
@@ -159,7 +161,9 @@ type ExportMode = "thisMonth" | "lastMonth" | "thisYear" | "lastYear" | "custom"
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function AnalyticsPage() {
-  const { setView, transactions, updateTransaction, deleteTransaction, usdRate, isLoadingHistory, hasMoreTransactions, loadMoreTransactions, timeFilter, setTimeFilter, customRange } = useApp()
+  const { setView } = useAuth()
+  const { transactions, updateTransaction, deleteTransaction, isLoadingHistory, hasMoreTransactions, loadMoreTransactions } = useTransactions()
+  const { usdRate, timeFilter, setTimeFilter, customRange } = useSettings()
   const [recurringFreqFilter, setRecurringFreqFilter] = useState<"all" | "weekly" | "biweekly" | "monthly" | "annual">("all")
   const [expandedFutureGroups, setExpandedFutureGroups] = useState<Set<string>>(new Set())
   const [deletingFutureTx, setDeletingFutureTx] = useState<Transaction | null>(null)

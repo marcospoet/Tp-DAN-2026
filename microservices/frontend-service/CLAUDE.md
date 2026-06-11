@@ -57,7 +57,13 @@ JWT-based authentication against `auth-service` (via API Gateway). Tokens are st
 - `profile` → `components/profile-page.tsx`
 - `analytics` → `components/analytics-page.tsx` (trend chart, donut chart, recurring transactions)
 
-All global state lives in `lib/app-context.tsx` (React Context).
+Global state is split across three nested React Contexts, composed by `AppProvider` in `lib/app-context.tsx`:
+
+- `lib/auth-context.tsx` (`useAuth`) — user/session, view navigation, sign-out
+- `lib/transactions-context.tsx` (`useTransactions`) — transactions CRUD, offline queue
+- `lib/settings-context.tsx` (`useSettings`) — profile/preferences (AI provider, API keys, exchange rate, filters)
+
+`lib/app-context.tsx` re-exports the shared types (`Transaction`, `View`, etc.) for backward-compatible type-only imports.
 
 ### Core Data Model
 

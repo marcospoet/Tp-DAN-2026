@@ -15,11 +15,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useApp } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
+import { useSettings } from "@/lib/settings-context"
 import { apiRequest } from "@/lib/api-client"
 
 export function ProfilePage() {
-  const { setView, userName, setUserName, saveProfile, user } = useApp()
+  const { setView, user } = useAuth()
+  const { userName, setUserName, saveProfile } = useSettings()
   const [localName, setLocalName] = useState(userName)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")

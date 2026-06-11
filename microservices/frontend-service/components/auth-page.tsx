@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useApp } from "@/lib/app-context"
+import { useAuth } from "@/lib/auth-context"
 import { apiRequest, setToken } from "@/lib/api-client"
 import { toast } from "sonner"
 
@@ -50,7 +50,7 @@ function GitHubIcon() {
 }
 
 export function AuthPage() {
-  const { setView } = useApp()
+  const { setView } = useAuth()
 
   const [mode, setMode] = useState<Mode>("login")
   const [name, setName] = useState("")
