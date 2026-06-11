@@ -24,17 +24,20 @@ public class ChatService {
     private final PromptService prompts;
     private final ToolExecutorService toolExecutor;
     private final AiProperties aiProperties;
+    private final UserProfileService userProfileService;
 
     public ChatService(ChatSessionRepository sessionRepo,
                        AiProviderService aiProvider,
                        PromptService prompts,
                        ToolExecutorService toolExecutor,
-                       AiProperties aiProperties) {
+                       AiProperties aiProperties,
+                       UserProfileService userProfileService) {
         this.sessionRepo = sessionRepo;
         this.aiProvider = aiProvider;
         this.prompts = prompts;
         this.toolExecutor = toolExecutor;
         this.aiProperties = aiProperties;
+        this.userProfileService = userProfileService;
     }
 
     public ChatResponse chat(ChatRequest req) {
@@ -57,8 +60,12 @@ public class ChatService {
         // Build history from session + incoming history if provided
         List<ChatTurnDto> history = buildHistory(req, session);
 
-        // Build system prompt with financial context
-        String systemPrompt = prompts.buildChatSystemPrompt(req.getFinancialContext());
+        // Build system prompt with financial context + long-term profile note
+        String profileNote = userProfileService.buildProfileNote(userId);
+        String contextWithProfile = profileNote.isBlank()
+                ? req.getFinancialContext()
+                : profileNote + "\n" + (req.getFinancialContext() != null ? req.getFinancialContext() : "");
+        String systemPrompt = prompts.buildChatSystemPrompt(contextWithProfile);
 
         // Call AI — agentic loop with tools when enabled, plain chat otherwise
         String reply = aiProperties.isToolsEnabled()
@@ -70,6 +77,9 @@ public class ChatService {
         session.addMessage(new ChatMessage("assistant", reply));
         session = sessionRepo.save(session);
         enforceSessionLimit(userId);
+
+        // Update long-term profile in background (never blocks the reply)
+        userProfileService.updateFromContext(userId, req.getFinancialContext());
 
         return new ChatResponse(reply.trim(), session.getId());
     }

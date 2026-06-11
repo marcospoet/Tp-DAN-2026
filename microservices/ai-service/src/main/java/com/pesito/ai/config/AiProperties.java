@@ -13,6 +13,9 @@ public class AiProperties {
     private String geminiApiKey = "";
     private String transactionServiceBaseUrl = "http://localhost:8082";
     private boolean toolsEnabled = true;
+    private String langfusePublicKey = "";
+    private String langfuseSecretKey = "";
+    private String langfuseHost = "https://cloud.langfuse.com";
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
@@ -31,6 +34,15 @@ public class AiProperties {
 
     public boolean isToolsEnabled() { return toolsEnabled; }
     public void setToolsEnabled(boolean toolsEnabled) { this.toolsEnabled = toolsEnabled; }
+
+    public String getLangfusePublicKey() { return langfusePublicKey; }
+    public void setLangfusePublicKey(String langfusePublicKey) { this.langfusePublicKey = langfusePublicKey; }
+
+    public String getLangfuseSecretKey() { return langfuseSecretKey; }
+    public void setLangfuseSecretKey(String langfuseSecretKey) { this.langfuseSecretKey = langfuseSecretKey; }
+
+    public String getLangfuseHost() { return langfuseHost; }
+    public void setLangfuseHost(String langfuseHost) { this.langfuseHost = langfuseHost; }
 
     public String getActiveApiKey() {
         return switch (provider.toLowerCase()) {

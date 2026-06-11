@@ -214,6 +214,12 @@ export function DashboardPage() {
   const { rates: liveRates, loading: ratesLoading } = useExchangeRate({ enabled: true })
 
   // ── Derived / computed ───────────────────────────────────────────────────────
+  const advisorPrompts = [
+    "¿Cómo aplico la regla 50/30/20 a mis gastos?",
+    "¿Cuánto debería ahorrar este mes?",
+    "¿En qué estoy gastando de más?",
+  ]
+
   const suggestedPrompts = useMemo(() => {
     if (transactions.length === 0) {
       return ["¿Cómo registro un gasto?", "¿Qué puedo consultar?", "¿Cómo funciona el asistente?"]
@@ -781,6 +787,8 @@ export function DashboardPage() {
     chatMessages,
     chatInput,
     setChatInput,
+    chatMode,
+    setChatMode,
     isChatProcessing,
     chatStatusText,
     lastModifiedTxId,
@@ -1099,7 +1107,9 @@ export function DashboardPage() {
             setChatInput={setChatInput}
             isChatProcessing={isChatProcessing}
             chatStatusText={chatStatusText}
-            suggestedPrompts={suggestedPrompts}
+            suggestedPrompts={chatMode === "advisor" ? advisorPrompts : suggestedPrompts}
+            chatMode={chatMode}
+            onChatModeChange={setChatMode}
             isChatRecording={isChatRecording}
             chatAudioStream={chatAudioStream}
             chatEndRef={chatEndRef}

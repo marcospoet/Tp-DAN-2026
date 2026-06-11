@@ -23,6 +23,8 @@ interface ChatPanelProps {
   suggestedPrompts?: string[]
   startChatRecording: () => void
   stopChatRecording: (opts?: { cancel?: boolean }) => void
+  chatMode: "assistant" | "advisor"
+  onChatModeChange: (mode: "assistant" | "advisor") => void
 }
 
 // Canvas-based real-time waveform — no React state re-renders during animation
@@ -108,6 +110,8 @@ export function ChatPanel({
   suggestedPrompts = ["¿Cuánto gasté esta semana?", "¿Me alcanza el presupuesto este mes?", "¿En qué categoría gasto más?"],
   startChatRecording,
   stopChatRecording,
+  chatMode,
+  onChatModeChange,
 }: ChatPanelProps) {
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -182,10 +186,22 @@ export function ChatPanel({
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground leading-none mb-1">Pesito AI</p>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  En línea
-                </p>
+                <div className="flex gap-1 mt-0.5">
+                  {(["assistant", "advisor"] as const).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => onChatModeChange(mode)}
+                      className={`text-[10px] px-2 py-0.5 rounded-full transition-colors cursor-pointer ${
+                        chatMode === mode
+                          ? "bg-accent text-accent-foreground font-medium"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {mode === "assistant" ? "Asistente" : "Asesor"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">

@@ -100,6 +100,9 @@ export function useChatHandler({
     return [INITIAL_BOT_MESSAGE]
   })
   const [chatInput, setChatInput] = useState("")
+  // "assistant": detecta intents y registra/modifica transacciones.
+  // "advisor": todo va directo al agente conversacional (consejos financieros).
+  const [chatMode, setChatMode] = useState<"assistant" | "advisor">("assistant")
   const [isChatProcessing, setIsChatProcessing] = useState(false)
   const [chatStatusText, setChatStatusText] = useState<string | null>(null)
   const [lastModifiedTxId, setLastModifiedTxId] = useState<string | null>(null)
@@ -319,6 +322,12 @@ export function useChatHandler({
   const processMessage = async (userMsg: string) => {
     const prevMessages = chatMessages
     setChatMessages(prev => [...prev, { role: "user", text: userMsg }])
+
+    // Advisor mode: skip intent detection entirely — pure conversational agent
+    if (chatMode === "advisor") {
+      await dispatchChatMessage(userMsg, prevMessages)
+      return
+    }
 
     const lowerMsg = userMsg.toLowerCase()
 
@@ -717,6 +726,8 @@ export function useChatHandler({
     setChatMessages,
     chatInput,
     setChatInput,
+    chatMode,
+    setChatMode,
     isChatProcessing,
     chatStatusText,
     lastModifiedTxId,
