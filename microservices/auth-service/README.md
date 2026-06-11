@@ -110,9 +110,16 @@ management.endpoint.health.show-details=always
 | `GET` | `/api/auth/profile` | ✅ JWT | Obtener perfil del usuario |
 | `PUT` | `/api/auth/profile` | ✅ JWT | Actualizar perfil (nombre, budget, IA key, etc.) |
 | `DELETE` | `/api/auth/account` | ✅ JWT | Eliminar cuenta (publica `user.deleted`) |
+| `GET` | `/internal/users/{userId}/api-keys` | 🔒 `X-Internal-Secret` | Devuelve las API keys del usuario **descifradas**, para uso exclusivo de ai-service |
 
 **Nota:** Los endpoints marcados con ✅ JWT leen el header `X-User-Id` inyectado por el Gateway.
 No necesitan re-validar el JWT.
+
+**Nota:** El endpoint `/internal/**` no está expuesto por el API Gateway (no hay ruta
+`/internal/**` configurada) y solo es alcanzable container-to-container dentro de la
+red de Docker. Su seguridad no depende de Spring Security (está en `permitAll()`),
+sino de la validación del header `X-Internal-Secret` contra `app.internal-api-secret`
+dentro del propio controller.
 
 ---
 
@@ -169,9 +176,34 @@ El JWT contiene:
 }
 ```
 
-**Importante:** Las API keys del usuario (Claude, OpenAI, Gemini) NO van en el JWT.
-El ai-service las obtiene llamando a auth-service con el `userId` cuando las necesita,
-o el frontend las envía directamente en cada request al ai-service.
+**Importante:** Las API keys del usuario (Claude, OpenAI, Gemini) NO van en el JWT
+y el frontend nunca las envía en los requests al ai-service. El ai-service las
+obtiene llamando internamente a `GET /internal/users/{userId}/api-keys` de
+auth-service usando el `userId` (header `X-User-Id`).
+
+---
+
+## API Keys de IA: cifrado en reposo y resolución interna
+
+Las API keys de IA del usuario (`apiKeyClaude`, `apiKeyOpenai`, `apiKeyGemini`) se
+guardan **cifradas con AES-256-GCM** en `auth.profiles`
+(`ApiKeyEncryptionUtil` + `EncryptedStringConverter`, formato
+`Base64(IV[12] || ciphertext+authTag)`, clave derivada de `app.encryption.secret`
+vía PBKDF2). Filas legacy con `''` (anteriores al cifrado) se tratan como
+ausencia de key.
+
+- `GET /api/auth/profile` devuelve la key **enmascarada** (`sk-p...****jikA`,
+  primeros 4 + últimos 4 caracteres) — nunca el valor real, solo para mostrarla
+  en Ajustes.
+- `PUT /api/auth/profile`: si el valor recibido coincide con la versión
+  enmascarada de la key actual (es decir, el usuario guardó el formulario sin
+  re-tipear la key), se ignora y se conserva la key real almacenada. Solo se
+  sobreescribe si el usuario envía un valor nuevo distinto, o vacío para borrarla.
+- `GET /internal/users/{userId}/api-keys`: devuelve las keys **descifradas**,
+  protegido por el header `X-Internal-Secret` (config `app.internal-api-secret`,
+  env `INTERNAL_API_SECRET`, compartido con ai-service). Lo usa exclusivamente
+  ai-service para resolver la key del usuario al llamar a Claude/OpenAI/Gemini,
+  sin que la key real pase nunca por el frontend ni por el API Gateway.
 
 ---
 
