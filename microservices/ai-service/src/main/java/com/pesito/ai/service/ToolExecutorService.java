@@ -24,11 +24,14 @@ public class ToolExecutorService {
     private final AiProviderService aiProvider;
     private final ToolRegistry toolRegistry;
     private final FinancialToolsService financialTools;
+    private final RagToolService ragTools;
 
-    public ToolExecutorService(AiProviderService aiProvider, ToolRegistry toolRegistry, FinancialToolsService financialTools) {
+    public ToolExecutorService(AiProviderService aiProvider, ToolRegistry toolRegistry,
+                                FinancialToolsService financialTools, RagToolService ragTools) {
         this.aiProvider = aiProvider;
         this.toolRegistry = toolRegistry;
         this.financialTools = financialTools;
+        this.ragTools = ragTools;
     }
 
     public String runAgentLoop(String userId, String systemPrompt, List<ChatTurnDto> history,
@@ -51,7 +54,10 @@ public class ToolExecutorService {
             lastText = result.text();
             List<String> toolResults = new ArrayList<>();
             for (ToolCall call : result.toolCalls()) {
-                toolResults.add(financialTools.execute(userId, call));
+                String toolResult = "search_financial_knowledge".equals(call.name())
+                        ? ragTools.execute(call, provider, apiKey)
+                        : financialTools.execute(userId, call);
+                toolResults.add(toolResult);
             }
             aiProvider.appendToolResults(provider, messages, result.toolCalls(), toolResults);
         }

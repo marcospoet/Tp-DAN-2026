@@ -31,7 +31,8 @@ services:
   # ============================================================
 
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: ./infrastructure/postgres
     container_name: bb-postgres
     environment:
       POSTGRES_DB: pesito
@@ -40,6 +41,7 @@ services:
       # Pasamos las contraseñas de los usuarios de app para que init.sh las use
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
       TXN_DB_PASSWORD: ${TXN_DB_PASSWORD}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
@@ -239,6 +241,11 @@ services:
       EUREKA_HOST: eureka-server
       TRANSACTION_HOST: transaction-service
       SPRING_PROFILES_ACTIVE: docker
+      # PostgreSQL (pgvector) — knowledge base de RAG
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: pesito
+      AI_DB_USER: ${AI_DB_USER}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD}
       # AI provider config — server-side API keys
       AI_PROVIDER: ${AI_PROVIDER:-claude}
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
@@ -249,6 +256,8 @@ services:
     networks:
       - app-net
     depends_on:
+      postgres:
+        condition: service_healthy
       mongodb:
         condition: service_healthy
       rabbitmq:

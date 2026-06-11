@@ -24,7 +24,8 @@ public class ToolRegistry {
                 getTransactions(mapper),
                 getMonthlySummary(mapper),
                 createTransaction(mapper),
-                getExchangeRate(mapper)
+                getExchangeRate(mapper),
+                searchFinancialKnowledge(mapper)
         );
     }
 
@@ -103,6 +104,20 @@ public class ToolRegistry {
         return new ToolDefinition(
                 "get_exchange_rate",
                 "Obtiene la cotización actual del dólar (blue, oficial, tarjeta, mep) en tiempo real.",
+                params
+        );
+    }
+
+    private ToolDefinition searchFinancialKnowledge(ObjectMapper mapper) {
+        ObjectNode params = objectSchema(mapper);
+        ObjectNode props = (ObjectNode) params.get("properties");
+        props.set("query", stringProp(mapper, "Consulta en lenguaje natural sobre comisiones, productos o regulaciones financieras."));
+        ((ArrayNode) params.get("required")).add("query");
+        return new ToolDefinition(
+                "search_financial_knowledge",
+                "Busca información sobre billeteras virtuales, bancos, AFIP/BCRA y educación financiera " +
+                        "en la base de conocimiento. Usala para preguntas sobre comisiones, requisitos, " +
+                        "regulaciones o conceptos financieros que no dependan de los datos del usuario.",
                 params
         );
     }

@@ -212,11 +212,17 @@ El agente combina cuatro capacidades:
 |--------|----------------|
 | **PromptService** | Construye el system prompt dinámico: nombre del usuario, presupuesto, moneda, cotización actual y definición de tools disponibles |
 | **ChatHistoryService** | Lee y persiste el historial en MongoDB. Ventana deslizante de 40 turnos, TTL 30 días |
-| **ToolExecutorService** | Loop de function calling: detecta tool calls en la respuesta del LLM, las ejecuta y devuelve resultados para continuar el razonamiento |
-| **RagService** | Recibe la query, la embebe, busca los chunks más similares en pgvector por cosine similarity, devuelve los fragmentos al ToolExecutorService |
-| **KnowledgeBaseLoader** | Indexa la knowledge base al startup: lee archivos Markdown y PDFs, los chunkea, los embebe y los inserta en pgvector. Detecta cambios via hash MD5 para no re-indexar innecesariamente |
-| **WebScraperService** *(v2)* | Descarga y parsea páginas web configuradas (Jsoup). Ejecutado por scheduler cada 2 días. Re-indexa solo si el contenido cambió |
+| **ToolExecutorService** | Loop de function calling (máx. 5 iteraciones): detecta tool calls en la respuesta del LLM, las despacha (tools financieras → `FinancialToolsService`, RAG → `RagToolService`) y devuelve los resultados al LLM para continuar el razonamiento |
+| **RagToolService** ✅ | Implementa la tool `search_financial_knowledge`: resuelve la API key de embeddings a usar, llama a `RagService.search(...)` y arma el JSON `{"results":[{source, content}, ...]}` (o `{"error": ...}`) que recibe el LLM |
+| **RagService** ✅ | Orquesta el RAG: `ensureIndexed()` (indexado perezoso bajo demanda) + `search()` (embebe la query y busca los chunks más similares en pgvector por cosine similarity) |
+| **KnowledgeBaseLoader** ✅ | Lee los archivos de `knowledge-base/markdown/*.md` y `knowledge-base/pdf/*.pdf` (vía `PathMatchingResourcePatternResolver` + Apache PDFBox para PDF) y devuelve `List<KnowledgeSource>` |
+| **TextChunker** ✅ | Divide cada fuente en chunks de ~500 palabras con solapamiento de ~50 palabras |
+| **EmbeddingService** ✅ | Llama a `POST https://api.openai.com/v1/embeddings` (`text-embedding-3-small`) en batch (indexado) o individual (query) |
+| **KnowledgeChunkRepository** ✅ | Acceso a `ai.knowledge_sources` / `ai.knowledge_chunks` vía `JdbcTemplate` + `com.pgvector.PGvector` (hash MD5 por fuente, upsert, búsqueda `ORDER BY embedding <=> ? LIMIT 5`) |
+| **WebScraperService** *(Fase 2 — pendiente)* | Descarga y parsea páginas web configuradas (Jsoup). Ejecutado por scheduler cada 2 días. Re-indexa solo si el contenido cambió |
 | **AiProviderService** | Abstracción sobre Claude, OpenAI y Gemini. Gestiona formato de mensajes, envío de tool definitions e interpretación de tool calls en cada formato propietario |
+
+> ✅ = implementado y verificado end-to-end en esta entrega (commit RAG Fase 1).
 
 ---
 
@@ -226,16 +232,30 @@ La base de conocimiento se implementa en **dos fases evolutivas**: una inicial c
 
 ---
 
-### Fase 1 — Datos estáticos: Markdown y PDF (implementación inicial)
+### Fase 1 — Datos estáticos: Markdown y PDF ✅ Implementada
 
-La primera implementación utiliza exclusivamente **archivos curados manualmente** almacenados en el repositorio. Estos archivos se indexan en pgvector al arranque del ai-service.
+La primera implementación utiliza exclusivamente **archivos curados manualmente** almacenados en el repositorio (`ai-service/src/main/resources/knowledge-base/`), indexados en **pgvector** dentro del schema `ai` de la misma base PostgreSQL que ya usa `transaction-service` (usuario dedicado `ai_db_user`, sin acceso a los schemas `auth`/`txn`, gestionado con **Flyway**, migración `V1__init_rag_schema.sql`).
 
-#### Pipeline de indexado estático
+A diferencia del diseño original (indexado al *startup*), la implementación final usa **indexado perezoso (lazy)**: no hay un paso de indexado al arrancar `ai-service`. El indexado/re-indexado se dispara **cada vez que el agente invoca la tool `search_financial_knowledge`**, justo antes de resolver la búsqueda. Esto evita demorar el arranque del servicio y mantiene la lógica de "actualizar solo si cambió" en un único lugar (`RagService.ensureIndexed`).
+
+#### Resolución de la API key para embeddings
+
+RAG necesita una API key de **OpenAI** para generar embeddings (`text-embedding-3-small`), independientemente del proveedor de LLM elegido para el chat (Claude/OpenAI/Gemini no ofrecen, o no son compatibles, con este modelo de embeddings). La política implementada es:
+
+- Si el usuario eligió **provider = OpenAI** y cargó su propia API key → se usa **esa key** (tanto para indexar como para embeber la query).
+- En cualquier otro caso (Claude, Gemini, o sin key de OpenAI) → se usa la API key de OpenAI configurada **server-side** (`OPENAI_API_KEY`) como *fallback*.
+- Si ninguna está disponible, `search_financial_knowledge` devuelve `{"error": "RAG requiere una API key de OpenAI..."}` y el LLM se lo informa al usuario en vez de inventar una respuesta.
+
+#### Pipeline de indexado perezoso (lazy)
 
 ```
-Al iniciar ai-service
+El agente invoca la tool search_financial_knowledge(query)
         ↓
-KnowledgeBaseLoader escanea /knowledge-base/
+RagToolService resuelve la API key de embeddings (ver arriba)
+        ↓
+RagService.ensureIndexed(embeddingApiKey)
+        ↓
+KnowledgeBaseLoader escanea /knowledge-base/markdown/*.md y /pdf/*.pdf
         ↓
 Por cada archivo:
   ┌─────────────────────────────────────────────────────┐
@@ -243,41 +263,58 @@ Por cada archivo:
   │  ¿Es .pdf? → extraer texto con Apache PDFBox        │
   └─────────────────────────────────────────────────────┘
         ↓
-  Calcular MD5 del contenido
+  Calcular MD5 del contenido (TextChunker + EmbeddingService)
         ↓
-  ¿Hash igual al guardado en BD?
+  ¿Hash igual al guardado en ai.knowledge_sources?
     SÍ  → saltar (ya indexado y sin cambios)
-    NO  → borrar chunks anteriores de pgvector
-           rechunkear (~500 tokens, solapamiento 50 tokens)
-           embeber cada chunk (OpenAI text-embedding-3-small)
-           insertar en pgvector con metadata (fuente, fecha)
-           guardar nuevo hash
+    NO  → borrar chunks anteriores en ai.knowledge_chunks
+           rechunkear (~500 palabras, solapamiento ~50 palabras)
+           embeber cada chunk (OpenAI text-embedding-3-small, batch)
+           insertar en ai.knowledge_chunks (source, chunk_index, content, embedding)
+           guardar nuevo hash en ai.knowledge_sources
         ↓
-KnowledgeBaseLoader finaliza → ai-service listo
+RagService.search(query, embeddingApiKey, topK=5)
+        ↓
+search_financial_knowledge devuelve los chunks al LLM
 ```
 
-#### Estructura de archivos en el proyecto
+#### Esquema de base de datos (Flyway, schema `ai`)
+
+```sql
+CREATE TABLE ai.knowledge_sources (
+    source       VARCHAR(255) PRIMARY KEY,
+    content_hash VARCHAR(32)  NOT NULL,
+    indexed_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ai.knowledge_chunks (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    source      VARCHAR(255) NOT NULL,
+    chunk_index INT          NOT NULL,
+    content     TEXT         NOT NULL,
+    embedding   vector(1536) NOT NULL
+);
+```
+
+No se usa índice `ivfflat`/`hnsw` sobre `embedding`: el dataset es chico (6 fuentes, 8 chunks) y la búsqueda exacta por `<=>` (cosine distance) es suficiente.
+
+#### Estructura de archivos implementada
 
 ```
 ai-service/src/main/resources/knowledge-base/
 │
 ├── markdown/
-│   ├── FAQ_MERCADOPAGO.md          ← comisiones, límites, cuentas, tarjetas
-│   ├── FAQ_UALÁ.md                 ← tarifario, beneficios, requisitos
-│   ├── FAQ_BRUBANK.md              ← productos, tasas, atención
-│   ├── FAQ_NARANJAX.md             ← cuotas, cashback, financiación
-│   ├── FAQ_GALICIA.md              ← cuentas, préstamos, inversiones
-│   ├── FAQ_NACION.md               ← cuentas gratuitas, ANSES, jubilados
-│   ├── FAQ_BBVA.md                 ← banca digital, tasas
-│   ├── FAQ_SANTANDER.md            ← productos, beneficios
-│   ├── EDUCACION_FINANCIERA.md     ← plazo fijo, FCI, CEDEARs, cauciones
-│   └── DERECHOS_CONSUMIDOR.md      ← Ley 24.240, devoluciones, garantías
+│   ├── FAQ_MERCADOPAGO.md          ← transferencias, extracciones, cuenta remunerada, QR, créditos
+│   ├── FAQ_UALA.md                 ← transferencias, tarjeta prepaga/crédito, cuenta remunerada, Ualá Bis
+│   ├── FAQ_BRUBANK.md              ← cuenta 100% digital, caja remunerada, tarjeta de crédito, plazo fijo
+│   ├── FAQ_NARANJAX.md             ← cuotas sin interés, cashback, préstamos, extracciones
+│   ├── EDUCACION_FINANCIERA.md     ← plazo fijo tradicional vs UVA, FCI, CEDEARs, cauciones, tipos de cambio
+│   └── AFIP_BCRA.md                ← monotributo (categorías, recategorización), tasas BCRA/CER, Ley 24.240
 │
-└── pdf/
-    ├── afip_monotributo_2026.pdf   ← tabla oficial de categorías y cuotas
-    ├── bcra_tasas_referencia.pdf   ← tasas de política monetaria y depósitos
-    └── cnv_guia_inversor.pdf       ← guía educativa para inversores minoristas
+└── pdf/                            ← vacío (.gitkeep); KnowledgeBaseLoader soporta PDF vía Apache PDFBox
 ```
+
+> Subconjunto representativo del listado original (10 `.md` + 3 `.pdf`): cubre las entidades y temas usados en los ejemplos de la sección 4 (Mercado Pago, Ualá, plazo fijo UVA, monotributo). `FAQ_GALICIA`, `FAQ_NACION`, `FAQ_BBVA`, `FAQ_SANTANDER`, `DERECHOS_CONSUMIDOR` (incorporado dentro de `AFIP_BCRA.md`) y los PDFs oficiales de AFIP/BCRA/CNV quedan como ampliación futura — el pipeline ya soporta agregarlos sin cambios de código.
 
 #### Formato recomendado para los Markdown
 
@@ -424,8 +461,9 @@ LLM razona y responde citando la fuente
 | Backend agente | Java 21, Spring Boot 3.2.5, Spring Data MongoDB |
 | LLM providers | Claude 3.5 Sonnet/Haiku (Anthropic), GPT-4o-mini (OpenAI), Gemini 2.0 Flash (Google) |
 | Memoria conversacional | MongoDB 7 — colección `chat_sessions`, TTL index 30 días |
-| Vector store (RAG) | **pgvector** — extensión de PostgreSQL 16 ya existente en el proyecto |
-| Embeddings (RAG) | OpenAI `text-embedding-3-small` (1536 dims, ~$0.02/1M tokens) |
+| Vector store (RAG) | **pgvector** (v0.7.4) — extensión compilada desde fuente sobre `postgres:16-alpine`, schema `ai` dedicado con usuario propio (`ai_db_user`) |
+| Acceso a datos RAG | Spring Data JDBC (`JdbcTemplate`) + `com.pgvector:pgvector` + Flyway (migración `V1__init_rag_schema.sql`) — sin JPA/Hibernate |
+| Embeddings (RAG) | OpenAI `text-embedding-3-small` (1536 dims, ~$0.02/1M tokens) — key del usuario si `provider=openai`, sino `OPENAI_API_KEY` server-side |
 | Extracción PDF | **Apache PDFBox** — ya presente en el proyecto como dependencia |
 | HTML parsing (Fase 2) | **Jsoup 1.17** — liviano, sin dependencias adicionales |
 | Scheduler (Fase 2) | Spring `@Scheduled` — integrado en Spring Boot, sin infraestructura extra |
@@ -508,9 +546,10 @@ AiProviderService                ToolExecutorService            RagService
 │                      │ search_financial_knowledge (RAG)              │
 │ Memoria              │ MongoDB chat sessions (40 turnos, TTL 30d)    │
 ├──────────────────────┼───────────────────────────────────────────────┤
-│ RAG Fase 1           │ Markdown + PDF curados, indexados en pgvector │
-│ (implementación      │ Fuentes: billeteras AR, bancos, AFIP, BCRA,   │
-│  inicial)            │ educación financiera, Ley del Consumidor      │
+│ RAG Fase 1 ✅        │ Markdown curados (6 fuentes / 8 chunks),       │
+│ (implementada)       │ indexado perezoso en pgvector (schema "ai")   │
+│                      │ Fuentes: MP, Ualá, Brubank, Naranja X,        │
+│                      │ educación financiera, AFIP/BCRA               │
 ├──────────────────────┼───────────────────────────────────────────────┤
 │ RAG Fase 2           │ Enfoque mixto: scraping con Jsoup cada 2 días │
 │ (evolución)          │ para fuentes HTML estáticas (BCRA, AFIP) +    │
