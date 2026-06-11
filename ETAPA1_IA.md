@@ -430,12 +430,70 @@ LLM razona y responde citando la fuente
 | HTML parsing (Fase 2) | **Jsoup 1.17** — liviano, sin dependencias adicionales |
 | Scheduler (Fase 2) | Spring `@Scheduled` — integrado en Spring Boot, sin infraestructura extra |
 | Transcripción de audio | OpenAI Whisper / Gemini multimodal |
-| Observabilidad | Prometheus + Grafana (métricas), Loki + Promtail (logs), Tempo (trazas) |
+| Observabilidad infra | Prometheus + Grafana (métricas), Loki + Promtail (logs), Tempo (trazas) |
+| Observabilidad IA | **Langfuse** — trazas de conversaciones, llamadas a LLM (tokens/costo/latencia), tool calls y retrieval RAG |
 | Despliegue | Docker Compose (desarrollo), Kubernetes (producción) |
 
 ---
 
-## 8. Resumen conceptual
+## 8. Observabilidad del agente IA — Langfuse
+
+Además de las métricas de infraestructura (Prometheus/Grafana/Loki/Tempo), un agente LLM necesita observabilidad **específica de IA**: qué prompt se envió, qué tools decidió invocar, cuántos tokens consumió cada llamada, cuánto costó y qué chunks de RAG se recuperaron. Para esto se incorpora **Langfuse**, una plataforma open-source de LLM observability.
+
+### Qué se traza
+
+| Concepto Langfuse | Mapeo en Pesito IA |
+|-------------------|--------------------|
+| **Trace** | Un turno completo de conversación (mensaje del usuario → respuesta final) |
+| **Generation** | Cada llamada a Claude/OpenAI/Gemini dentro del turno: prompt, respuesta, modelo, tokens de entrada/salida, latencia y costo estimado |
+| **Span** | Cada paso intermedio del agente: ejecución de una tool (`get_transactions`, `create_transaction`, etc.), búsqueda RAG en pgvector |
+| **Metadata** | `userId`, `sessionId`, provider utilizado (Claude/OpenAI/Gemini), chunks recuperados con su score de similitud |
+| **Score / Evaluación** | (futuro) feedback del usuario (👍/👎) o evaluaciones automáticas de calidad de respuesta |
+
+### Integración con la arquitectura
+
+```
+AiProviderService                ToolExecutorService            RagService
+        │                                │                          │
+        │  inicia trace (turno)          │                          │
+        ▼                                ▼                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Langfuse SDK (Java)                         │
+│   trace → generation (LLM call: tokens, costo, latencia)            │
+│         → span (tool call: nombre, args, resultado)                 │
+│         → span (RAG: query, chunks devueltos, similarity)           │
+└─────────────────────────────┬─────────────────────────────────────┘
+                               │ HTTP (batch async)
+                               ▼
+                    ┌─────────────────────┐
+                    │   Langfuse server   │
+                    │ (self-hosted Docker │
+                    │  o Langfuse Cloud)  │
+                    └─────────────────────┘
+```
+
+- `AiProviderService` abre el `trace` al recibir el mensaje del usuario y registra cada `generation` (una por cada ida y vuelta con el LLM, incluyendo las que disparan tool calls).
+- `ToolExecutorService` registra un `span` por cada tool ejecutada, con sus parámetros y resultado.
+- `RagService` registra un `span` con la query, los chunks recuperados y su score de similitud — clave para depurar si el RAG está devolviendo contexto relevante.
+- El envío a Langfuse es **asíncrono y por lotes**, por lo que no agrega latencia perceptible al loop del agente.
+
+### Despliegue
+
+| Opción | Descripción | Cuándo usarla |
+|--------|-------------|---------------|
+| **Langfuse Cloud (free tier)** | SaaS gestionado, alcanza para desarrollo y demo del TP | Recomendada para esta entrega: cero infraestructura adicional |
+| **Self-hosted (Docker Compose)** | Se agrega el contenedor `langfuse` + Postgres propio al `docker-compose.yml` | Si se requiere mantener todos los datos dentro de la infraestructura propia |
+
+### Beneficios concretos para Pesito IA
+
+- **Debugging del razonamiento**: ver paso a paso por qué el agente eligió (o no) una tool ante una consulta ambigua.
+- **Costos por provider**: comparar gasto real entre Claude, OpenAI y Gemini para decidir el provider por defecto.
+- **Calidad del RAG**: detectar consultas donde `search_financial_knowledge` no devuelve chunks relevantes, para mejorar la knowledge base.
+- **Detección de regresiones**: comparar trazas antes/después de cambios en el system prompt o en las tools.
+
+---
+
+## 9. Resumen conceptual
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -459,7 +517,8 @@ LLM razona y responde citando la fuente
 │                      │ Markdown curado para SPAs (MP, Ualá, etc.)    │
 ├──────────────────────┼───────────────────────────────────────────────┤
 │ Interfaz             │ Next.js 16 — web app con chat y magic bar     │
-│ Observabilidad       │ Prometheus, Grafana, Loki, Tempo              │
+│ Observabilidad infra │ Prometheus, Grafana, Loki, Tempo              │
+│ Observabilidad IA    │ Langfuse — trazas, tokens, costos, RAG debug  │
 └──────────────────────┴───────────────────────────────────────────────┘
 ```
 
