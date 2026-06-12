@@ -4,9 +4,6 @@ const nextConfig = {
     NEXT_PUBLIC_OAUTH_URL: process.env.NEXT_PUBLIC_OAUTH_URL || "http://localhost:8080",
   },
   output: "standalone",
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },

@@ -17,7 +17,7 @@ interface ChatPanelProps {
   chatStatusText?: string | null
   isChatRecording: boolean
   chatAudioStream: MediaStream | null
-  chatEndRef: React.RefObject<HTMLDivElement>
+  chatEndRef: React.RefObject<HTMLDivElement | null>
   handleChatSubmit: (e: React.FormEvent) => void
   onQuickPrompt: (text: string) => void
   onResetChat: () => void

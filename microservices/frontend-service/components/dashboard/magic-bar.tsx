@@ -49,9 +49,9 @@ interface MagicBarProps {
   ratesLoading: boolean
   usdRate: number
   handleMagicSubmit: (e: React.FormEvent) => void
-  galleryInputRef: React.RefObject<HTMLInputElement>
-  cameraInputRef: React.RefObject<HTMLInputElement>
-  fileInputRef: React.RefObject<HTMLInputElement>
+  galleryInputRef: React.RefObject<HTMLInputElement | null>
+  cameraInputRef: React.RefObject<HTMLInputElement | null>
+  fileInputRef: React.RefObject<HTMLInputElement | null>
   handleImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   startCamera: () => void

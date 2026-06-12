@@ -177,7 +177,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
       persistQueue([])
       setPendingOfflineCount(0)
     })()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [isOnline, user])
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ export function TransactionsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!getToken()) return
     loadTransactions()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   // ── Reset on sign-out ─────────────────────────────────────────────────────────

@@ -488,7 +488,7 @@ export function LandingPage() {
   useEffect(() => {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
     if (standalone) { setIsInstalled(true); return }
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator as any).standalone
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator as Navigator & { standalone?: boolean }).standalone
     setIsIOS(ios); if (ios) setShowIOSBanner(true)
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as BeforeInstallPromptEvent) }
     window.addEventListener("beforeinstallprompt", handler)
