@@ -54,6 +54,24 @@ data:
         ALTER DEFAULT PRIVILEGES IN SCHEMA txn GRANT ALL ON SEQUENCES TO txn_user;
         REVOKE ALL ON SCHEMA auth FROM txn_user;
 
+        CREATE SCHEMA IF NOT EXISTS ai;
+
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'ai_db_user') THEN
+                CREATE ROLE ai_db_user WITH LOGIN PASSWORD '${AI_DB_PASSWORD}';
+            END IF;
+        END
+        \$\$;
+
+        GRANT USAGE, CREATE ON SCHEMA ai TO ai_db_user;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ai TO ai_db_user;
+        GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ai TO ai_db_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ai GRANT ALL ON TABLES TO ai_db_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ai GRANT ALL ON SEQUENCES TO ai_db_user;
+        REVOKE ALL ON SCHEMA auth FROM ai_db_user;
+        REVOKE ALL ON SCHEMA txn FROM ai_db_user;
+
     EOSQL
 
 ---

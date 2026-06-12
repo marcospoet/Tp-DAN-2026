@@ -57,6 +57,11 @@ spec:
                 secretKeyRef:
                   name: bb-secrets
                   key: TXN_DB_PASSWORD
+            - name: AI_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: AI_DB_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

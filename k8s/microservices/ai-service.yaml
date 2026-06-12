@@ -60,6 +60,20 @@ spec:
               value: eureka-server
             - name: EUREKA_INSTANCE_PREFERIPADDRESS
               value: "true"
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_DB
+              value: pesito
+            - name: AI_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: AI_DB_USER
+            - name: AI_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: AI_DB_PASSWORD
           readinessProbe:
             httpGet:
               path: /actuator/health
