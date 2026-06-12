@@ -259,6 +259,10 @@ services:
       AI_DB_USER: ${AI_DB_USER}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD}
       # Sin API keys de IA server-side: son siempre por-usuario (cifradas en auth-service)
+      # Observabilidad Langfuse (opcional: sin keys queda deshabilitado)
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
     ports:
       - "8083:8083"
     networks:
