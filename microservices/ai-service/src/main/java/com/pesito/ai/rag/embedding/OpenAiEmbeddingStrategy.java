@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,6 +20,8 @@ public class OpenAiEmbeddingStrategy implements EmbeddingStrategy {
 
     private static final String EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
     private static final String MODEL = "text-embedding-3-small";
+    // Cota al block(): sin esto un proveedor caído deja el hilo colgado indefinidamente
+    private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     private final WebClient webClient;
     private final ObjectMapper mapper;
@@ -47,7 +50,7 @@ public class OpenAiEmbeddingStrategy implements EmbeddingStrategy {
                 .bodyValue(body.toString())
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .block();
+                .block(TIMEOUT);
 
         List<float[]> result = new ArrayList<>();
         for (JsonNode item : response.path("data")) {

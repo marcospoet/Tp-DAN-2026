@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Migración de embeddings al cambiar entre proveedores incompatibles
  * (Caso B: openai ↔ gemini). El usuario eligió "Actualizar mis documentos":
@@ -22,6 +25,9 @@ public class EmbeddingMigrationService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingMigrationService.class);
 
+    /** Usuarios con migración en curso: evita migraciones concurrentes del mismo usuario. */
+    private final Set<String> inProgress = ConcurrentHashMap.newKeySet();
+
     private final EmbeddingStrategyResolver embeddings;
     private final RagService ragService;
     private final ChatMemoryService chatMemoryService;
@@ -33,6 +39,15 @@ public class EmbeddingMigrationService {
         this.ragService = ragService;
         this.chatMemoryService = chatMemoryService;
         this.userProfileService = userProfileService;
+    }
+
+    /**
+     * Reserva el cupo de migración del usuario. Devuelve false si ya tiene una
+     * en curso (el caller debe responder 409 y NO llamar a migrate). El cupo se
+     * libera al terminar migrate, con éxito o error.
+     */
+    public boolean tryAcquire(String userId) {
+        return inProgress.add(userId);
     }
 
     @Async
@@ -50,6 +65,8 @@ public class EmbeddingMigrationService {
                     userId, provider, memories);
         } catch (Exception e) {
             log.error("[MIGRATION] falló para userId={} provider={}: {}", userId, provider, e.getMessage());
+        } finally {
+            inProgress.remove(userId);
         }
     }
 }

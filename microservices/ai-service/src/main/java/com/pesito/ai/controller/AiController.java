@@ -98,6 +98,12 @@ public class AiController {
             // El usuario acaba de guardar la key nueva: invalidar el caché antes de resolverla
             userApiKeysClient.evict(userId);
             String apiKey = resolveUserApiKey(userId, provider);
+            // Una sola migración por usuario a la vez: evita re-embeber en paralelo
+            // y disparos en loop que consuman saldo de la API key del usuario
+            if (!migrationService.tryAcquire(userId)) {
+                return ResponseEntity.status(409)
+                        .body(Map.of("error", "Ya hay una actualización de documentos en curso. Esperá a que termine."));
+            }
             migrationService.migrate(userId, provider, apiKey);
             return ResponseEntity.accepted().body(Map.of("started", true));
         } catch (IllegalArgumentException e) {
