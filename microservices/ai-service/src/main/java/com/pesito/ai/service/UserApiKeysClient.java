@@ -2,6 +2,7 @@ package com.pesito.ai.service;
 
 import com.pesito.ai.config.AiProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -12,6 +13,10 @@ import org.springframework.web.reactive.function.client.WebClient;
  * Falla en modo "abierto": ante cualquier error (usuario sin keys, timeout,
  * auth-service caído, etc.) devuelve {@link UserApiKeys#EMPTY}, dejando que
  * AiProviderService recurra a las keys server-side configuradas por entorno.
+ *
+ * El resultado se cachea 60s por usuario (Caffeine): evita un round-trip a
+ * auth-service (query + descifrado AES) en cada request de IA. Un cambio de
+ * keys en Settings tarda como mucho 60s en impactar.
  */
 @Service
 public class UserApiKeysClient {
@@ -31,6 +36,7 @@ public class UserApiKeysClient {
         this.internalApiSecret = aiProperties.getInternalApiSecret();
     }
 
+    @Cacheable(value = "user-api-keys", condition = "#userId != null && !#userId.isBlank()")
     public UserApiKeys getApiKeys(String userId) {
         if (userId == null || userId.isBlank()) {
             return UserApiKeys.EMPTY;
