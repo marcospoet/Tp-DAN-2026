@@ -1,13 +1,29 @@
 package com.pesito.ai.dto;
 
+import jakarta.validation.constraints.Size;
+
 public class ParseRequest {
 
+    @Size(max = 4000, message = "El texto no puede superar los 4000 caracteres.")
     private String input = "";
+
+    // ~10 MB en base64 (~7.5 MB binario) por adjunto
+    @Size(max = 10_000_000, message = "La imagen adjunta es demasiado grande.")
     private String imageBase64;
+
+    @Size(max = 50)
     private String imageMimeType = "image/jpeg";
+
+    @Size(max = 10_000_000, message = "El archivo adjunto es demasiado grande.")
     private String fileBase64;
+
+    @Size(max = 50)
     private String fileMimeType;
+
+    @Size(max = 20)
     private String todayDate;
+
+    @Size(max = 20)
     private String provider;
 
     public String getInput() { return input; }

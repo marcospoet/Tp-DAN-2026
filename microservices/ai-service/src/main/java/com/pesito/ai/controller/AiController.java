@@ -13,6 +13,7 @@ import com.pesito.ai.service.EmbeddingMigrationService;
 import com.pesito.ai.service.PromptService;
 import com.pesito.ai.service.UserApiKeysClient;
 import com.pesito.ai.service.UserProfileService;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,8 +29,9 @@ import java.util.Map;
  * The API keys for AI providers are managed server-side via environment variables.
  * The frontend does NOT send API keys from Phase B onward.
  *
- * userId is read from X-User-Id header (injected by the API Gateway JWT filter
- * when it is implemented; for now it can also be sent in the request body).
+ * userId is read exclusively from the X-User-Id header, injected by the API
+ * Gateway JWT filter. Client-supplied userIds (body or spoofed header) are
+ * never trusted: the gateway overwrites the header with the JWT claim.
  */
 @RestController
 @RequestMapping("/api/ai")
@@ -90,11 +92,8 @@ public class AiController {
     @PostMapping("/embeddings/migrate")
     public ResponseEntity<?> migrateEmbeddings(
             @RequestBody Map<String, String> body,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         try {
-            if (userId == null || userId.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Falta el usuario."));
-            }
             String provider = aiProvider.resolveProvider(body.get("provider"));
             // El usuario acaba de guardar la key nueva: invalidar el caché antes de resolverla
             userApiKeysClient.evict(userId);
@@ -119,11 +118,8 @@ public class AiController {
      */
     @PostMapping("/embeddings/pause")
     public ResponseEntity<?> pauseDocuments(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         try {
-            if (userId == null || userId.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Falta el usuario."));
-            }
             userProfileService.setDocumentsPaused(userId, true);
             return ResponseEntity.ok(Map.of("paused", true));
         } catch (Exception e) {
@@ -143,8 +139,8 @@ public class AiController {
      */
     @PostMapping("/parse")
     public ResponseEntity<?> parse(
-            @RequestBody ParseRequest req,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @Valid @RequestBody ParseRequest req,
+            @RequestHeader("X-User-Id") String userId) {
         try {
             String safeInput = prompts.sanitizeUserInput(req.getInput());
             String userMessage = prompts.buildUserMessage(safeInput, req.getTodayDate());
@@ -190,16 +186,11 @@ public class AiController {
      */
     @PostMapping("/chat")
     public ResponseEntity<?> chat(
-            @RequestBody ChatRequest req,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId) {
+            @Valid @RequestBody ChatRequest req,
+            @RequestHeader("X-User-Id") String headerUserId) {
         try {
-            // Header takes priority over body userId
-            if (headerUserId != null && !headerUserId.isBlank()) {
-                req.setUserId(headerUserId);
-            }
-            if (req.getMessage() == null || req.getMessage().isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "El mensaje no puede estar vacío."));
-            }
+            // El userId del body se ignora siempre: solo vale el del gateway
+            req.setUserId(headerUserId);
             // Sanitize the incoming user message
             String safeMsg = prompts.sanitizeUserInput(req.getMessage());
             req.setMessage(safeMsg);
@@ -240,8 +231,8 @@ public class AiController {
      */
     @PostMapping("/detect-intent")
     public ResponseEntity<?> detectIntent(
-            @RequestBody DetectIntentRequest req,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @Valid @RequestBody DetectIntentRequest req,
+            @RequestHeader("X-User-Id") String userId) {
         try {
             String safeMsg = prompts.sanitizeUserInput(req.getMessage());
             String userMessage = prompts.buildDetectMessage(safeMsg, req.getTodayDate());
@@ -277,7 +268,7 @@ public class AiController {
     @PostMapping("/csv-mapping")
     public ResponseEntity<?> csvMapping(
             @RequestBody Map<String, Object> req,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         try {
             String provider = req.get("provider") instanceof String s ? s : null;
             String apiKey = resolveUserApiKey(userId, provider);
@@ -305,12 +296,9 @@ public class AiController {
      */
     @PostMapping("/transcribe")
     public ResponseEntity<?> transcribe(
-            @RequestBody TranscribeRequest req,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @Valid @RequestBody TranscribeRequest req,
+            @RequestHeader("X-User-Id") String userId) {
         try {
-            if (req.getAudioBase64() == null || req.getAudioBase64().isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "No se recibió audio."));
-            }
             String apiKey = resolveUserApiKey(userId, req.getProvider());
             String transcription = aiProvider.transcribeAudio(
                     req.getAudioBase64(), req.getMimeType(),

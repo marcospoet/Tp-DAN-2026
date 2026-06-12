@@ -1,14 +1,28 @@
 package com.pesito.ai.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import java.util.List;
 
 public class ChatRequest {
 
     private String userId;
+
+    @Size(max = 100, message = "sessionId inválido.")
     private String sessionId;
+
+    @NotBlank(message = "El mensaje no puede estar vacío.")
+    @Size(max = 2000, message = "El mensaje no puede superar los 2000 caracteres.")
     private String message;
+
+    @Size(max = 100_000, message = "El contexto financiero es demasiado grande.")
     private String financialContext = "";
+
+    @Size(max = 50, message = "El historial no puede superar los 50 mensajes.")
     private List<ChatTurnDto> history;
+
+    @Size(max = 20)
     private String provider;
 
     public String getUserId() { return userId; }

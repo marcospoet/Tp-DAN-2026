@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,7 +40,7 @@ public class TransactionController {
     @PostMapping
     public ResponseEntity<TransactionResponse> create(
             @RequestHeader("X-User-Id") UUID userId,
-            @RequestBody CreateTransactionRequest request) {
+            @Valid @RequestBody CreateTransactionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(transactionService.create(userId, request));
     }
@@ -81,7 +82,7 @@ public class TransactionController {
     public ResponseEntity<TransactionResponse> update(
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID id,
-            @RequestBody UpdateTransactionRequest request) {
+            @Valid @RequestBody UpdateTransactionRequest request) {
         return ResponseEntity.ok(transactionService.update(userId, id, request));
     }
 

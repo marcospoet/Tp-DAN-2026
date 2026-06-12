@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.UUID;
 
 /**
@@ -39,8 +41,11 @@ public class InternalController {
         @PathVariable String userId,
         @RequestHeader(value = "X-Internal-Secret", required = false) String secret
     ) {
+        // Comparacion constant-time para no filtrar el secreto via timing attack
         if (internalApiSecret == null || internalApiSecret.isBlank()
-            || secret == null || !internalApiSecret.equals(secret)) {
+            || secret == null || !MessageDigest.isEqual(
+                internalApiSecret.getBytes(StandardCharsets.UTF_8),
+                secret.getBytes(StandardCharsets.UTF_8))) {
             return ResponseEntity.status(403).build();
         }
 
