@@ -22,6 +22,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { migrateEmbeddings, pauseDocuments } from "@/lib/ai"
 import { useAuth } from "@/lib/auth-context"
 import { useSettings, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/settings-context"
 import { PAYMENT_ACCOUNTS, ACCOUNT_CATEGORIES } from "@/components/dashboard/shared"
@@ -100,6 +109,7 @@ export function SettingsPage() {
 
   const [editingKey, setEditingKey] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState("")
+  const [showProviderSwitchModal, setShowProviderSwitchModal] = useState(false)
   const [localProvider, setLocalProvider] = useState<AIProvider>(aiProvider)
   const [localKeysClaude, setLocalKeysClaude] = useState(apiKeyClaude)
   const [localKeysOpenAI, setLocalKeysOpenAI] = useState(apiKeyOpenAI)
@@ -192,18 +202,8 @@ export function SettingsPage() {
     { key: "mep", label: "MEP", emoji: "📈" },
   ]
 
-  const handleSave = async () => {
-    // Block save if the API key has the wrong format for the selected provider
-    const prefix = KEY_PREFIXES[localProvider]
-    const activeKey =
-      localProvider === "claude" ? localKeysClaude :
-      localProvider === "openai" ? localKeysOpenAI : localKeysGemini
-    if (activeKey && !activeKey.startsWith(prefix)) {
-      setKeyError(`La clave de ${activeProviderMeta.label} debe empezar con "${prefix}"`)
-      return
-    }
-    setKeyError(null)
-
+  /** Persiste ajustes en contexto + backend y muestra el éxito. */
+  const persistSettings = async () => {
     let newRate = parseFloat(localUsdRate) || 1350
 
     if (localExMode === "api") {
@@ -246,6 +246,56 @@ export function SettingsPage() {
       setSaved(false)
       setView("dashboard")
     }, 800)
+  }
+
+  const handleSave = async () => {
+    // Block save if the API key has the wrong format for the selected provider
+    const prefix = KEY_PREFIXES[localProvider]
+    const activeKey =
+      localProvider === "claude" ? localKeysClaude :
+      localProvider === "openai" ? localKeysOpenAI : localKeysGemini
+    if (activeKey && !activeKey.startsWith(prefix)) {
+      setKeyError(`La clave de ${activeProviderMeta.label} debe empezar con "${prefix}"`)
+      return
+    }
+    setKeyError(null)
+
+    // Caso B: cambio entre proveedores con vectores incompatibles (OpenAI ↔ Gemini).
+    // Interrumpir con el modal antes de guardar. Mismo proveedor o cambio
+    // hacia/desde Claude (Caso A) → guardado silencioso.
+    const incompatibleSwitch =
+      aiProvider !== localProvider &&
+      (aiProvider === "openai" || aiProvider === "gemini") &&
+      (localProvider === "openai" || localProvider === "gemini")
+    if (incompatibleSwitch) {
+      setShowProviderSwitchModal(true)
+      return
+    }
+
+    await persistSettings()
+  }
+
+  /** Caso B — "Actualizar mis documentos": guarda y re-procesa en background. */
+  const handleMigrateDocuments = async () => {
+    setShowProviderSwitchModal(false)
+    const newProvider = localProvider
+    await persistSettings()
+    try {
+      await migrateEmbeddings(newProvider)
+    } catch {
+      // Best-effort: si falla, el backend re-indexa lazy en la próxima búsqueda.
+    }
+  }
+
+  /** Caso B — "Solo chatear": guarda la key y pausa los documentos (sin tokens). */
+  const handlePauseDocuments = async () => {
+    setShowProviderSwitchModal(false)
+    await persistSettings()
+    try {
+      await pauseDocuments()
+    } catch {
+      // Best-effort: la pausa solo afecta la búsqueda semántica.
+    }
   }
 
   return (
@@ -822,6 +872,42 @@ export function SettingsPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Caso B: cambio entre proveedores con datos procesados incompatibles */}
+      <AlertDialog open={showProviderSwitchModal} onOpenChange={setShowProviderSwitchModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cambio de proveedor de IA</AlertDialogTitle>
+            <AlertDialogDescription>
+              Detectamos que cambiaste de proveedor de Inteligencia Artificial.
+              Para que el agente pueda seguir leyendo los documentos que ya
+              subiste, necesitamos procesarlos nuevamente con el nuevo modelo.
+              Esto consumirá saldo de tu nueva cuenta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+              onClick={handleMigrateDocuments}
+            >
+              Actualizar mis documentos
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full cursor-pointer"
+              onClick={handlePauseDocuments}
+            >
+              Solo chatear (Pausar documentos)
+            </Button>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground text-center transition-colors cursor-pointer pt-1"
+              onClick={() => setShowProviderSwitchModal(false)}
+            >
+              Cancelar
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

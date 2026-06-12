@@ -157,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         removeToken()
       })
       .finally(() => setLoadingAuth(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   // ── Auth actions ─────────────────────────────────────────────────────────────

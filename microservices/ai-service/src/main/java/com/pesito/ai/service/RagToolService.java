@@ -3,7 +3,6 @@ package com.pesito.ai.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.pesito.ai.config.AiProperties;
 import com.pesito.ai.rag.RagService;
 import com.pesito.ai.rag.RetrievedChunk;
 import com.pesito.ai.tool.ToolCall;
@@ -12,10 +11,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Ejecuta la tool search_financial_knowledge (RAG sobre pgvector).
- * Los embeddings siempre usan OpenAI text-embedding-3-small: si el usuario tiene
- * configurada su propia API key de OpenAI se reusa esa key; en cualquier otro caso
- * se usa OPENAI_API_KEY server-side como fallback.
+ * Ejecuta la tool search_financial_knowledge.
+ *
+ * Ruteo según el proveedor activo del usuario (patrón Strategy):
+ *   - openai / gemini → búsqueda vectorial con embeddings nativos del proveedor
+ *     y la key del propio usuario.
+ *   - claude (sin API de embeddings) o documentos pausados → búsqueda keyword.
  */
 @Service
 public class RagToolService {
@@ -23,30 +24,26 @@ public class RagToolService {
     private static final int TOP_K = 5;
 
     private final RagService ragService;
-    private final AiProperties aiProperties;
+    private final UserProfileService userProfileService;
     private final ObjectMapper mapper;
 
-    public RagToolService(RagService ragService, AiProperties aiProperties, ObjectMapper mapper) {
+    public RagToolService(RagService ragService, UserProfileService userProfileService, ObjectMapper mapper) {
         this.ragService = ragService;
-        this.aiProperties = aiProperties;
+        this.userProfileService = userProfileService;
         this.mapper = mapper;
     }
 
-    public String execute(ToolCall call, String provider, String apiKey, String userOpenAiKey) {
+    public String execute(String userId, ToolCall call, String provider, String apiKey) {
         try {
             String query = call.arguments() != null ? call.arguments().path("query").asText("") : "";
             if (query.isBlank()) {
                 return errorJson("Falta el parámetro 'query'.");
             }
 
-            String embeddingKey = (userOpenAiKey != null && !userOpenAiKey.isBlank())
-                    ? userOpenAiKey
-                    : aiProperties.getOpenaiApiKey();
-            if (embeddingKey == null || embeddingKey.isBlank()) {
-                return errorJson("RAG requiere una API key de OpenAI (configurada en el servidor o provista por el usuario con provider=openai).");
-            }
-
-            List<RetrievedChunk> chunks = ragService.search(query, embeddingKey, TOP_K);
+            List<RetrievedChunk> chunks = userProfileService.isDocumentsPaused(userId)
+                    ? ragService.searchText(query, TOP_K)
+                    : ragService.search(query, provider, apiKey, TOP_K)
+                            .orElseGet(() -> ragService.searchText(query, TOP_K));
 
             ObjectNode result = mapper.createObjectNode();
             ArrayNode arr = result.putArray("results");

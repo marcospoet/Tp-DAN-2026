@@ -6,12 +6,16 @@ import com.pesito.ai.dto.DetectIntentRequest;
 import com.pesito.ai.dto.ParseRequest;
 import com.pesito.ai.dto.RawAiResponse;
 import com.pesito.ai.dto.TranscribeRequest;
+import com.pesito.ai.exception.AiProviderUnavailableException;
 import com.pesito.ai.service.AiProviderService;
 import com.pesito.ai.service.ChatService;
+import com.pesito.ai.service.EmbeddingMigrationService;
 import com.pesito.ai.service.PromptService;
 import com.pesito.ai.service.UserApiKeysClient;
+import com.pesito.ai.service.UserProfileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,15 +41,21 @@ public class AiController {
     private final ChatService chatService;
     private final PromptService prompts;
     private final UserApiKeysClient userApiKeysClient;
+    private final UserProfileService userProfileService;
+    private final EmbeddingMigrationService migrationService;
 
     public AiController(AiProviderService aiProvider,
                         ChatService chatService,
                         PromptService prompts,
-                        UserApiKeysClient userApiKeysClient) {
+                        UserApiKeysClient userApiKeysClient,
+                        UserProfileService userProfileService,
+                        EmbeddingMigrationService migrationService) {
         this.aiProvider = aiProvider;
         this.chatService = chatService;
         this.prompts = prompts;
         this.userApiKeysClient = userApiKeysClient;
+        this.userProfileService = userProfileService;
+        this.migrationService = migrationService;
     }
 
     /**
@@ -55,11 +65,72 @@ public class AiController {
     private String resolveUserApiKey(String userId, String provider) {
         UserApiKeysClient.UserApiKeys keys = userApiKeysClient.getApiKeys(userId);
         String p = aiProvider.resolveProvider(provider);
-        return switch (p) {
+        String key = switch (p) {
             case "openai" -> keys.openai();
             case "gemini" -> keys.gemini();
             default -> keys.claude();
         };
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException(
+                "No configuraste tu clave de API para " + p + ". Andá a Ajustes → Cuenta."
+            );
+        }
+        return key;
+    }
+
+    /**
+     * Cambio de proveedor con espacios vectoriales incompatibles (Caso B):
+     * "Actualizar mis documentos" — reindexa la knowledge base, re-embebe las
+     * memorias de chat y el perfil con el proveedor nuevo. Corre en background
+     * (202 Accepted) y consume saldo de la cuenta nueva del usuario.
+     *
+     * POST /api/ai/embeddings/migrate
+     * Body: { provider: "openai" | "gemini" }
+     */
+    @PostMapping("/embeddings/migrate")
+    public ResponseEntity<?> migrateEmbeddings(
+            @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        try {
+            if (userId == null || userId.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Falta el usuario."));
+            }
+            String provider = aiProvider.resolveProvider(body.get("provider"));
+            // El usuario acaba de guardar la key nueva: invalidar el caché antes de resolverla
+            userApiKeysClient.evict(userId);
+            String apiKey = resolveUserApiKey(userId, provider);
+            migrationService.migrate(userId, provider, apiKey);
+            return ResponseEntity.accepted().body(Map.of("started", true));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error in /api/ai/embeddings/migrate: {}", e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "No se pudo iniciar la actualización de documentos."));
+        }
+    }
+
+    /**
+     * Cambio de proveedor, opción "Solo chatear" (Caso B): pausa la lectura
+     * semántica de documentos — sin consumo de tokens — hasta que el usuario
+     * decida migrarlos.
+     *
+     * POST /api/ai/embeddings/pause
+     */
+    @PostMapping("/embeddings/pause")
+    public ResponseEntity<?> pauseDocuments(
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        try {
+            if (userId == null || userId.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Falta el usuario."));
+            }
+            userProfileService.setDocumentsPaused(userId, true);
+            return ResponseEntity.ok(Map.of("paused", true));
+        } catch (Exception e) {
+            log.error("Error in /api/ai/embeddings/pause: {}", e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "No se pudo pausar la lectura de documentos."));
+        }
     }
 
     /**
@@ -101,6 +172,9 @@ public class AiController {
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/parse: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/parse: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -137,11 +211,19 @@ public class AiController {
                 case "gemini" -> userKeys.gemini();
                 default -> userKeys.claude();
             };
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new IllegalArgumentException(
+                    "No configuraste tu clave de API para " + provider + ". Andá a Ajustes → Cuenta."
+                );
+            }
 
-            ChatResponse response = chatService.chat(req, req.getProvider(), apiKey, userKeys.openai());
+            ChatResponse response = chatService.chat(req, req.getProvider(), apiKey);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/chat: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/chat: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -176,6 +258,9 @@ public class AiController {
             return ResponseEntity.ok(new RawAiResponse(raw));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/detect-intent: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/detect-intent: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -194,9 +279,16 @@ public class AiController {
             @RequestBody Map<String, Object> req,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
         try {
+            String provider = req.get("provider") instanceof String s ? s : null;
+            String apiKey = resolveUserApiKey(userId, provider);
             String userContent = buildCsvMappingUserContent(req);
-            String raw = aiProvider.callSingleTurn(PromptService.CSV_MAPPING_PROMPT, userContent);
+            String raw = aiProvider.callSingleTurn(PromptService.CSV_MAPPING_PROMPT, userContent, null, null, provider, apiKey);
             return ResponseEntity.ok(new RawAiResponse(raw));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/csv-mapping: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/csv-mapping: {}", e.getMessage());
             return ResponseEntity.internalServerError()
@@ -224,6 +316,9 @@ public class AiController {
                     req.getAudioBase64(), req.getMimeType(),
                     req.getProvider(), apiKey);
             return ResponseEntity.ok(Map.of("transcription", transcription != null ? transcription : ""));
+        } catch (AiProviderUnavailableException e) {
+            log.warn("AI provider unavailable in /api/ai/transcribe: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/transcribe: {}", e.getMessage());
             return ResponseEntity.internalServerError()

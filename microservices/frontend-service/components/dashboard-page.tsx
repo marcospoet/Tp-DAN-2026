@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect, useMemo, useDeferredValue } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   MessageCircle, Settings, LogOut, Wallet, BarChart2, Loader2, WifiOff, RefreshCw, CheckCircle2, ChevronDown,
@@ -12,6 +12,7 @@ import { useTransactions, type RecurringFrequency } from "@/lib/transactions-con
 import { useSettings, type TimeFilter, type ExchangeRateType } from "@/lib/settings-context"
 import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
 import { getToken } from "@/lib/api-client"
+import { localIsoDate } from "@/lib/utils"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
 import { useChatHandler } from "@/hooks/use-chat-handler"
 import type { DateRange } from "react-day-picker"
@@ -181,6 +182,9 @@ export function DashboardPage() {
 
   // ── Search / view state ──────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("")
+  // El input se actualiza al instante; el filtrado de la lista (caro: re-render
+  // de todos los ítems animados) se difiere a baja prioridad → sin lag al tipear
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [showCategoryChart, setShowCategoryChart] = useState(false)
   const [showAllTx, setShowAllTx] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
@@ -216,12 +220,6 @@ export function DashboardPage() {
   const { rates: liveRates, loading: ratesLoading } = useExchangeRate({ enabled: true })
 
   // ── Derived / computed ───────────────────────────────────────────────────────
-  const advisorPrompts = [
-    "¿Cómo aplico la regla 50/30/20 a mis gastos?",
-    "¿Cuánto debería ahorrar este mes?",
-    "¿En qué estoy gastando de más?",
-  ]
-
   const suggestedPrompts = useMemo(() => {
     if (transactions.length === 0) {
       return [
@@ -319,17 +317,17 @@ export function DashboardPage() {
   }, [transactions])
 
   const displayedTransactions = useMemo(() => {
-    let result = typeFilter ? categoryFilteredTransactions.filter(tx => tx.type === typeFilter) : categoryFilteredTransactions
-    if (!searchQuery.trim()) return result
-    const q = searchQuery.toLowerCase()
+    const result = typeFilter ? categoryFilteredTransactions.filter(tx => tx.type === typeFilter) : categoryFilteredTransactions
+    if (!deferredSearchQuery.trim()) return result
+    const q = deferredSearchQuery.toLowerCase()
     return result.filter(tx =>
       tx.description.toLowerCase().includes(q) ||
       tx.category.toLowerCase().includes(q) ||
       (tx.observation?.toLowerCase().includes(q) ?? false),
     )
-  }, [categoryFilteredTransactions, searchQuery, typeFilter])
+  }, [categoryFilteredTransactions, deferredSearchQuery, typeFilter])
 
-  useEffect(() => { setShowAllTx(false) }, [filteredTransactions, searchQuery, typeFilter, categoryFilter])
+  useEffect(() => { setShowAllTx(false) }, [filteredTransactions, deferredSearchQuery, typeFilter, categoryFilter])
   useEffect(() => { setTypeFilter(null); setCategoryFilter(null) }, [timeFilter, customRange])
 
   const visibleTransactions = showAllTx ? displayedTransactions : displayedTransactions.slice(0, TX_PAGE)
@@ -398,7 +396,7 @@ export function DashboardPage() {
       type: "expense",
       category: "General",
       icon: "ShoppingCart",
-      date: new Date().toISOString().split("T")[0],
+      date: localIsoDate(),
       currency: newCurrency,
       exRateType: newExRateType,
       manualRate: newManualRate,
@@ -550,7 +548,11 @@ export function DashboardPage() {
           setTimeout(() => setAiError(null), 5000)
           return
         }
-        // Text that AI couldn't parse as transaction — redirect to chat for clarification
+        // Text that AI couldn't parse as transaction — redirect to chat
+        toast.info("Eso no parece una transacción", {
+          description: "Te mando al chat para responder tu consulta.",
+          duration: 3000,
+        })
         setChatOpen(true)
         setTimeout(() => { submitChatMessage(finalTextInput, undefined, true) }, 100)
         return
@@ -794,8 +796,6 @@ export function DashboardPage() {
     chatMessages,
     chatInput,
     setChatInput,
-    chatMode,
-    setChatMode,
     isChatProcessing,
     chatStatusText,
     lastModifiedTxId,
@@ -831,7 +831,7 @@ export function DashboardPage() {
       type: tx.type,
       category: tx.category,
       icon: tx.icon,
-      date: new Date(tx.date).toISOString().split("T")[0],
+      date: localIsoDate(new Date(tx.date)),
       currency: tx.currency,
       exRateType: (tx.exchangeRateType as ExchangeRateType) ?? "BLUE",
       manualRate: tx.txRate ? String(tx.txRate) : "",
@@ -1114,9 +1114,7 @@ export function DashboardPage() {
             setChatInput={setChatInput}
             isChatProcessing={isChatProcessing}
             chatStatusText={chatStatusText}
-            suggestedPrompts={chatMode === "advisor" ? advisorPrompts : suggestedPrompts}
-            chatMode={chatMode}
-            onChatModeChange={setChatMode}
+            suggestedPrompts={suggestedPrompts}
             isChatRecording={isChatRecording}
             chatAudioStream={chatAudioStream}
             chatEndRef={chatEndRef}
@@ -1234,7 +1232,7 @@ export function DashboardPage() {
           >
             <p className="text-sm font-semibold text-foreground">Registrá tu primer gasto</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Ej: <span className="font-medium text-foreground">"Almuerzo $1500"</span> o <span className="font-medium text-foreground">"Nafta 10 dólares"</span>
+              Ej: <span className="font-medium text-foreground">&ldquo;Almuerzo $1500&rdquo;</span> o <span className="font-medium text-foreground">&ldquo;Nafta 10 dólares&rdquo;</span>
             </p>
             <motion.div
               className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-card border-r border-b border-primary/40"

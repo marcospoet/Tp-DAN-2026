@@ -24,8 +24,11 @@ public class ToolRegistry {
                 getTransactions(mapper),
                 getMonthlySummary(mapper),
                 createTransaction(mapper),
+                updateTransaction(mapper),
+                deleteTransaction(mapper),
                 getExchangeRate(mapper),
-                searchFinancialKnowledge(mapper)
+                searchFinancialKnowledge(mapper),
+                searchConversationHistory(mapper)
         );
     }
 
@@ -96,6 +99,47 @@ public class ToolRegistry {
         );
     }
 
+    private ToolDefinition updateTransaction(ObjectMapper mapper) {
+        ObjectNode params = objectSchema(mapper);
+        ObjectNode props = (ObjectNode) params.get("properties");
+        props.set("id", stringProp(mapper, "ID (UUID) de la transacción a modificar. Obtenelo primero con get_transactions."));
+        props.set("description", stringProp(mapper, "Nueva descripción, opcional."));
+        props.set("amount", numberProp(mapper, "Nuevo monto, siempre positivo, opcional."));
+        props.set("type", enumStringProp(mapper, "Nuevo tipo de movimiento, opcional.", List.of("INCOME", "EXPENSE")));
+        props.set("category", stringProp(mapper, "Nueva categoría, opcional."));
+        props.set("date", stringProp(mapper, "Nueva fecha, formato YYYY-MM-DD, opcional."));
+        props.set("account", stringProp(mapper, "Nueva cuenta/billetera, opcional."));
+        props.set("currency", enumStringProp(mapper, "Nueva moneda, opcional.", List.of("ARS", "USD")));
+        props.set("observation", stringProp(mapper, "Nueva observación, opcional."));
+        ((ArrayNode) params.get("required")).add("id");
+        return new ToolDefinition(
+                "update_transaction",
+                "Modifica campos de una transacción existente del usuario. Solo enviá los campos a cambiar. " +
+                        "Usá get_transactions primero para obtener el id de la transacción.",
+                params
+        );
+    }
+
+    private ToolDefinition deleteTransaction(ObjectMapper mapper) {
+        ObjectNode params = objectSchema(mapper);
+        ObjectNode props = (ObjectNode) params.get("properties");
+        props.set("id", stringProp(mapper, "ID (UUID) de la transacción a eliminar. Obtenelo primero con get_transactions."));
+        ObjectNode confirmed = mapper.createObjectNode();
+        confirmed.put("type", "boolean");
+        confirmed.put("description", "Debe ser true. Solo invocá esta tool después de que el usuario " +
+                "confirmó explícitamente la eliminación en la conversación.");
+        props.set("confirmed", confirmed);
+        ArrayNode required = (ArrayNode) params.get("required");
+        required.add("id");
+        required.add("confirmed");
+        return new ToolDefinition(
+                "delete_transaction",
+                "Elimina una transacción existente del usuario. Antes de invocarla, mostrale al usuario la " +
+                        "transacción encontrada y pedile confirmación explícita.",
+                params
+        );
+    }
+
     private ToolDefinition getExchangeRate(ObjectMapper mapper) {
         ObjectNode params = objectSchema(mapper);
         ObjectNode props = (ObjectNode) params.get("properties");
@@ -118,6 +162,21 @@ public class ToolRegistry {
                 "Busca información sobre billeteras virtuales, bancos, AFIP/BCRA y educación financiera " +
                         "en la base de conocimiento. Usala para preguntas sobre comisiones, requisitos, " +
                         "regulaciones o conceptos financieros que no dependan de los datos del usuario.",
+                params
+        );
+    }
+
+    private ToolDefinition searchConversationHistory(ObjectMapper mapper) {
+        ObjectNode params = objectSchema(mapper);
+        ObjectNode props = (ObjectNode) params.get("properties");
+        props.set("query", stringProp(mapper, "Qué buscar en conversaciones pasadas, en lenguaje natural " +
+                "(ej: \"qué dije sobre mis vacaciones\", \"cuándo hablamos del aguinaldo\")."));
+        ((ArrayNode) params.get("required")).add("query");
+        return new ToolDefinition(
+                "search_conversation_history",
+                "Busca en el historial de conversaciones pasadas del usuario (memoria de largo plazo). " +
+                        "Usala cuando el usuario haga referencia a algo que dijo, preguntó o acordó antes " +
+                        "y no esté en la conversación actual.",
                 params
         );
     }

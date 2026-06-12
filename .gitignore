@@ -47,3 +47,7 @@ logs/
 # ----- Minikube / Kubernetes local -----
 kubeconfig
 .kube/
+
+# Documentos locales de la catedra (no versionar)
+TP_2 Agente.pdf
+1era Entrega 2do TP IA.docx

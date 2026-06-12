@@ -108,12 +108,35 @@ export function useExchangeRate({
       return
     }
 
-    fetchRates()
+    const startPolling = () => {
+      if (intervalRef.current) return
+      intervalRef.current = setInterval(fetchRates, refreshInterval)
+    }
+    const stopPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
 
-    intervalRef.current = setInterval(fetchRates, refreshInterval)
+    // Pausar el polling con la pestaña oculta (PWA: suele quedar abierta de
+    // fondo) — ahorra requests y batería. Al volver, refresca al instante.
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+      } else {
+        fetchRates()
+        startPolling()
+      }
+    }
+
+    fetchRates()
+    if (!document.hidden) startPolling()
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
+      stopPolling()
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [enabled, fetchRates, refreshInterval])
 

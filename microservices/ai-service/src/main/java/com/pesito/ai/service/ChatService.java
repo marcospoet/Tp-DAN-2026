@@ -25,26 +25,29 @@ public class ChatService {
     private final ToolExecutorService toolExecutor;
     private final AiProperties aiProperties;
     private final UserProfileService userProfileService;
+    private final ChatMemoryService chatMemoryService;
 
     public ChatService(ChatSessionRepository sessionRepo,
                        AiProviderService aiProvider,
                        PromptService prompts,
                        ToolExecutorService toolExecutor,
                        AiProperties aiProperties,
-                       UserProfileService userProfileService) {
+                       UserProfileService userProfileService,
+                       ChatMemoryService chatMemoryService) {
         this.sessionRepo = sessionRepo;
         this.aiProvider = aiProvider;
         this.prompts = prompts;
         this.toolExecutor = toolExecutor;
         this.aiProperties = aiProperties;
         this.userProfileService = userProfileService;
+        this.chatMemoryService = chatMemoryService;
     }
 
     public ChatResponse chat(ChatRequest req) {
-        return chat(req, null, null, null);
+        return chat(req, null, null);
     }
 
-    public ChatResponse chat(ChatRequest req, String providerOverride, String apiKeyOverride, String userOpenAiKey) {
+    public ChatResponse chat(ChatRequest req, String providerOverride, String apiKeyOverride) {
         String userId = req.getUserId() != null ? req.getUserId() : "anonymous";
 
         // Load or create session
@@ -69,7 +72,7 @@ public class ChatService {
 
         // Call AI — agentic loop with tools when enabled, plain chat otherwise
         String reply = aiProperties.isToolsEnabled()
-                ? toolExecutor.runAgentLoop(userId, systemPrompt, history, providerOverride, apiKeyOverride, userOpenAiKey)
+                ? toolExecutor.runAgentLoop(userId, systemPrompt, history, providerOverride, apiKeyOverride)
                 : aiProvider.callChat(systemPrompt, history, providerOverride, apiKeyOverride);
 
         // Persist the new exchange
@@ -78,8 +81,12 @@ public class ChatService {
         session = sessionRepo.save(session);
         enforceSessionLimit(userId);
 
-        // Update long-term profile in background (never blocks the reply)
+        // Long-term memory in background (never blocks the reply):
+        // semantic memory of the exchange + profile update
+        chatMemoryService.remember(userId, session.getId(), "user", req.getMessage(), providerOverride, apiKeyOverride);
+        chatMemoryService.remember(userId, session.getId(), "assistant", reply, providerOverride, apiKeyOverride);
         userProfileService.updateFromContext(userId, req.getFinancialContext());
+        userProfileService.maybeRegenerateSummary(userId, providerOverride, apiKeyOverride);
 
         return new ChatResponse(reply.trim(), session.getId());
     }

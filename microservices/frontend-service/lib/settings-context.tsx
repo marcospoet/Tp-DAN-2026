@@ -126,19 +126,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     defaultExRateType?: ExchangeRateType
   }) => {
     if (!user) return
+    // Las API keys solo viajan si vienen EXPLÍCITAS en overrides (settings /
+    // onboarding). El backend interpreta "" como "borrar la key": si las
+    // mandáramos siempre desde el estado del contexto, cualquier guardado de
+    // otro campo (nombre, presupuesto) o un guardado pre-hidratación las
+    // borraría silenciosamente. Backend ignora los campos null/ausentes.
+    const body: Record<string, unknown> = {
+      userName: overrides?.userName ?? userName,
+      defaultAccount: overrides?.defaultAccount ?? defaultAccount,
+      exchangeRateMode: overrides?.exchangeRateMode ?? exchangeRateMode,
+      usdRate: overrides?.usdRate ?? usdRate,
+      defaultExRateType: overrides?.defaultExRateType ?? defaultExRateType,
+    }
+    // aiProvider también opt-in: un guardado pre-hidratación (ej. "Saltar" en
+    // el onboarding tras un reload) mandaría el default "claude" y pisaría la
+    // elección real del usuario.
+    if (overrides && "aiProvider" in overrides) body.aiProvider = overrides.aiProvider
+    if (overrides && "apiKeyClaude" in overrides) body.apiKeyClaude = overrides.apiKeyClaude
+    if (overrides && "apiKeyOpenAI" in overrides) body.apiKeyOpenai = overrides.apiKeyOpenAI
+    if (overrides && "apiKeyGemini" in overrides) body.apiKeyGemini = overrides.apiKeyGemini
+
     await apiRequest("/api/auth/profile", {
       method: "PUT",
-      body: JSON.stringify({
-        userName: overrides?.userName ?? userName,
-        defaultAccount: overrides?.defaultAccount ?? defaultAccount,
-        exchangeRateMode: overrides?.exchangeRateMode ?? exchangeRateMode,
-        usdRate: overrides?.usdRate ?? usdRate,
-        aiProvider: overrides?.aiProvider ?? aiProvider,
-        apiKeyClaude: overrides?.apiKeyClaude ?? apiKeyClaude,
-        apiKeyOpenai: overrides?.apiKeyOpenAI ?? apiKeyOpenAI,
-        apiKeyGemini: overrides?.apiKeyGemini ?? apiKeyGemini,
-        defaultExRateType: overrides?.defaultExRateType ?? defaultExRateType,
-      }),
+      body: JSON.stringify(body),
     })
   }
 

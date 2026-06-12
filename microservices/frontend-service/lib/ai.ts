@@ -6,6 +6,7 @@
  */
 
 import { getToken } from "@/lib/api-client"
+import { localIsoDate } from "@/lib/utils"
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "") + "/api/ai"
 
@@ -237,7 +238,7 @@ export async function callAI(
   attachments?: AIAttachment[]
 ): Promise<ParsedTransaction | ParsedTransaction[]> {
   const safeInput = sanitizeUserInput(input)
-  const today = new Date().toISOString().split("T")[0]
+  const today = localIsoDate()
 
   const imageAttachment = attachments?.find(a => a.type === "image")
   const fileAttachment = attachments?.find(a => a.type === "file")
@@ -293,7 +294,7 @@ export async function callAIUpdateDetect(
   provider: unknown,
   message: string
 ): Promise<ParsedUpdate> {
-  const today = new Date().toISOString().split("T")[0]
+  const today = localIsoDate()
   try {
     const safeMsg = sanitizeUserInput(message)
     const data = await postToAiService<{ rawResponse: string }>("/detect-intent", {
@@ -336,7 +337,7 @@ export async function callAIDeleteDetect(
   provider: unknown,
   message: string
 ): Promise<ParsedDelete> {
-  const today = new Date().toISOString().split("T")[0]
+  const today = localIsoDate()
   try {
     const safeMsg = sanitizeUserInput(message)
     const data = await postToAiService<{ rawResponse: string }>("/detect-intent", {
@@ -358,7 +359,7 @@ export async function callAIRecurringDetect(
   provider: unknown,
   message: string
 ): Promise<ParsedRecurring> {
-  const today = new Date().toISOString().split("T")[0]
+  const today = localIsoDate()
   try {
     const safeMsg = sanitizeUserInput(message)
     const data = await postToAiService<{ rawResponse: string }>("/detect-intent", {
@@ -426,4 +427,22 @@ export async function transcribeAudioAttachment(
   } catch {
     return null
   }
+}
+
+/**
+ * Cambio entre proveedores con vectores incompatibles (OpenAI ↔ Gemini),
+ * opción "Actualizar mis documentos": el servidor re-procesa la base de
+ * conocimiento y las memorias con el proveedor nuevo, en background.
+ */
+export async function migrateEmbeddings(provider: string): Promise<void> {
+  await postToAiService("/embeddings/migrate", {}, provider)
+}
+
+/**
+ * Cambio entre proveedores incompatibles, opción "Solo chatear": pausa la
+ * lectura semántica de documentos hasta que el usuario decida procesarlos.
+ * No consume tokens.
+ */
+export async function pauseDocuments(): Promise<void> {
+  await postToAiService("/embeddings/pause", {})
 }

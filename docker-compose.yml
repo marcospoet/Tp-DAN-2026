@@ -257,11 +257,7 @@ services:
       POSTGRES_DB: pesito
       AI_DB_USER: ${AI_DB_USER}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD}
-      # AI provider config — server-side API keys
-      AI_PROVIDER: ${AI_PROVIDER:-claude}
-      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Sin API keys de IA server-side: son siempre por-usuario (cifradas en auth-service)
     ports:
       - "8083:8083"
     networks:

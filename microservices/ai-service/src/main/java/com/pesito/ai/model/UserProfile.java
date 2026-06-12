@@ -20,6 +20,17 @@ public class UserProfile {
     private String topCategory;
     private LocalDateTime updatedAt;
 
+    // Perfil financiero semántico: resumen en texto generado por LLM a partir
+    // de los resúmenes mensuales, embebido para búsqueda semántica.
+    private String summary;
+    private float[] summaryEmbedding;
+    private String summaryEmbeddingProvider; // "openai" | "gemini"
+    private LocalDateTime summaryGeneratedAt;
+
+    // Caso B del cambio de proveedor: el usuario eligió "Solo chatear" — las
+    // búsquedas semánticas degradan a keyword hasta que migre sus documentos.
+    private boolean documentsPaused;
+
     public UserProfile() {
     }
 
@@ -37,4 +48,19 @@ public class UserProfile {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+
+    public float[] getSummaryEmbedding() { return summaryEmbedding; }
+    public void setSummaryEmbedding(float[] summaryEmbedding) { this.summaryEmbedding = summaryEmbedding; }
+
+    public String getSummaryEmbeddingProvider() { return summaryEmbeddingProvider; }
+    public void setSummaryEmbeddingProvider(String summaryEmbeddingProvider) { this.summaryEmbeddingProvider = summaryEmbeddingProvider; }
+
+    public boolean isDocumentsPaused() { return documentsPaused; }
+    public void setDocumentsPaused(boolean documentsPaused) { this.documentsPaused = documentsPaused; }
+
+    public LocalDateTime getSummaryGeneratedAt() { return summaryGeneratedAt; }
+    public void setSummaryGeneratedAt(LocalDateTime summaryGeneratedAt) { this.summaryGeneratedAt = summaryGeneratedAt; }
 }

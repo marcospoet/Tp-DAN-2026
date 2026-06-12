@@ -6,8 +6,8 @@ import { Camera } from "lucide-react"
 
 interface CameraModalProps {
   showCamera: boolean
-  videoRef: React.RefObject<HTMLVideoElement>
-  canvasRef: React.RefObject<HTMLCanvasElement>
+  videoRef: React.RefObject<HTMLVideoElement | null>
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
   streamRef: React.MutableRefObject<MediaStream | null>
   stopCamera: () => void
   capturePhoto: () => void

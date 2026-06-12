@@ -7,6 +7,7 @@ import com.pesito.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -30,6 +31,9 @@ public class InternalController {
     @Value("${app.internal-api-secret}")
     private String internalApiSecret;
 
+    // Transaccional: con open-in-view=false la sesion de Hibernate ya no cubre
+    // todo el request, y User::getProfile es una relacion lazy
+    @Transactional(readOnly = true)
     @GetMapping("/internal/users/{userId}/api-keys")
     public ResponseEntity<InternalApiKeysResponse> getApiKeys(
         @PathVariable String userId,

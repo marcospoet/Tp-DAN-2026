@@ -83,6 +83,27 @@ public class LangfuseService {
         send("span-create", body);
     }
 
+    /** Registra una llamada al LLM como generation del trace, con tokens consumidos. */
+    public void addGeneration(String traceId, String name, String model, String input, String output,
+                              int inputTokens, int outputTokens) {
+        if (!enabled) return;
+        Map<String, Object> body = new HashMap<>();
+        body.put("id", UUID.randomUUID().toString());
+        body.put("traceId", traceId);
+        body.put("name", name);
+        body.put("model", model);
+        body.put("input", truncate(input));
+        body.put("output", truncate(output));
+        body.put("startTime", Instant.now().toString());
+        body.put("endTime", Instant.now().toString());
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("input", inputTokens);
+        usage.put("output", outputTokens);
+        usage.put("unit", "TOKENS");
+        body.put("usage", usage);
+        send("generation-create", body);
+    }
+
     /** Cierra el trace con la respuesta final del agente (upsert sobre el mismo id). */
     public void finishTrace(String traceId, String output) {
         if (!enabled) return;

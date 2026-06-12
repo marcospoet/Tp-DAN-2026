@@ -1,22 +1,21 @@
-package com.pesito.ai.rag;
+package com.pesito.ai.rag.embedding;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Genera embeddings con la API de OpenAI (text-embedding-3-small, 1536 dims),
- * usada tanto para indexar la knowledge base como para embeber las queries del agente.
+ * Embeddings nativos de OpenAI: text-embedding-3-small (1536 dims).
  */
-@Service
-public class EmbeddingService {
+@Component
+public class OpenAiEmbeddingStrategy implements EmbeddingStrategy {
 
     private static final String EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
     private static final String MODEL = "text-embedding-3-small";
@@ -24,11 +23,17 @@ public class EmbeddingService {
     private final WebClient webClient;
     private final ObjectMapper mapper;
 
-    public EmbeddingService(WebClient webClient, ObjectMapper mapper) {
+    public OpenAiEmbeddingStrategy(WebClient webClient, ObjectMapper mapper) {
         this.webClient = webClient;
         this.mapper = mapper;
     }
 
+    @Override
+    public String provider() {
+        return "openai";
+    }
+
+    @Override
     public List<float[]> embed(List<String> texts, String apiKey) {
         ObjectNode body = mapper.createObjectNode();
         body.put("model", MODEL);
@@ -54,9 +59,5 @@ public class EmbeddingService {
             result.add(vector);
         }
         return result;
-    }
-
-    public float[] embedOne(String text, String apiKey) {
-        return embed(List.of(text), apiKey).get(0);
     }
 }

@@ -358,7 +358,7 @@ function CalendarWithNav({
             <Calendar
               mode="range"
               selected={selected}
-              onSelect={onSelect as any}
+              onSelect={(range: DateRange | undefined) => onSelect?.(range)}
               locale={locale}
               disabled={disabled}
               month={viewDate}

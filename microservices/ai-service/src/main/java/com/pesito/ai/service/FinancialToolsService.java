@@ -49,6 +49,8 @@ public class FinancialToolsService {
                 case "get_transactions" -> getTransactions(userId, call.arguments());
                 case "get_monthly_summary" -> getMonthlySummary(userId, call.arguments());
                 case "create_transaction" -> createTransaction(userId, call.arguments());
+                case "update_transaction" -> updateTransaction(userId, call.arguments());
+                case "delete_transaction" -> deleteTransaction(userId, call.arguments());
                 case "get_exchange_rate" -> getExchangeRate(call.arguments());
                 default -> errorJson("Tool desconocida: " + call.name());
             };
@@ -100,6 +102,7 @@ public class FinancialToolsService {
         ArrayNode arr = result.putArray("transactions");
         for (TxItem tx : filtered) {
             ObjectNode node = arr.addObject();
+            node.put("id", tx.id());
             node.put("description", tx.description());
             node.put("amount", tx.amount());
             node.put("type", tx.type());
@@ -117,7 +120,15 @@ public class FinancialToolsService {
         if (month == null) {
             return errorJson("Falta el parámetro 'month' (formato YYYY-MM).");
         }
-        YearMonth ym = YearMonth.parse(month);
+        return getMonthlySummaryJson(userId, YearMonth.parse(month));
+    }
+
+    /**
+     * Resumen mensual reusable: lo consume la tool get_monthly_summary y la
+     * generación del perfil financiero semántico (UserProfileService).
+     */
+    public String getMonthlySummaryJson(String userId, YearMonth ym) throws Exception {
+        String month = ym.toString();
         List<TxItem> txs = fetchTransactions(userId, ym.atDay(1), ym.atEndOfMonth());
 
         BigDecimal income = BigDecimal.ZERO;
@@ -212,6 +223,79 @@ public class FinancialToolsService {
         return mapper.writeValueAsString(result);
     }
 
+    private String updateTransaction(String userId, JsonNode args) throws Exception {
+        String id = textOrNull(args, "id");
+        if (id == null) {
+            return errorJson("Falta el parámetro 'id' de la transacción a modificar. Usá get_transactions para obtenerlo.");
+        }
+
+        // Update parcial: el server ignora los campos null, solo enviamos lo provisto.
+        ObjectNode body = mapper.createObjectNode();
+        String description = textOrNull(args, "description");
+        if (description != null) body.put("description", description);
+        if (args.hasNonNull("amount")) body.put("amount", args.get("amount").decimalValue());
+        String type = textOrNull(args, "type");
+        if (type != null) body.put("type", type.toUpperCase());
+        String category = textOrNull(args, "category");
+        if (category != null) body.put("category", category);
+        LocalDate date = parseDate(args, "date");
+        if (date != null) body.put("date", date.toString());
+        String account = textOrNull(args, "account");
+        if (account != null) body.put("account", account);
+        String currency = textOrNull(args, "currency");
+        if (currency != null) body.put("currency", currency.toUpperCase());
+        String observation = textOrNull(args, "observation");
+        if (observation != null) body.put("observation", observation);
+
+        if (body.isEmpty()) {
+            return errorJson("No se indicó ningún campo a modificar.");
+        }
+
+        JsonNode updated = transactionServiceWebClient.put()
+                .uri("/api/transactions/{id}", id)
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body.toString())
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
+
+        ObjectNode result = mapper.createObjectNode();
+        result.put("success", true);
+        result.put("id", updated.path("id").asText());
+        result.put("description", updated.path("description").asText());
+        result.put("amount", updated.path("amount").decimalValue());
+        result.put("type", updated.path("type").asText());
+        result.put("category", updated.path("category").asText());
+        result.put("account", updated.path("account").asText());
+        result.put("date", updated.path("date").asText());
+        return mapper.writeValueAsString(result);
+    }
+
+    private String deleteTransaction(String userId, JsonNode args) throws Exception {
+        String id = textOrNull(args, "id");
+        if (id == null) {
+            return errorJson("Falta el parámetro 'id' de la transacción a eliminar. Usá get_transactions para obtenerlo.");
+        }
+        // Defensa adicional al prompt: nunca borrar sin confirmación explícita del usuario.
+        if (args == null || !args.path("confirmed").asBoolean(false)) {
+            return errorJson("Eliminación no confirmada por el usuario. Mostrale la transacción y pedile confirmación explícita antes de volver a invocar esta tool con confirmed=true.");
+        }
+
+        transactionServiceWebClient.delete()
+                .uri("/api/transactions/{id}", id)
+                .header("X-User-Id", userId)
+                .retrieve()
+                .toBodilessEntity()
+                .block();
+
+        ObjectNode result = mapper.createObjectNode();
+        result.put("success", true);
+        result.put("id", id);
+        result.put("message", "Transacción eliminada.");
+        return mapper.writeValueAsString(result);
+    }
+
     private String getExchangeRate(JsonNode args) throws Exception {
         String type = textOrNull(args, "type");
         JsonNode response = transactionServiceWebClient.get()
@@ -224,7 +308,7 @@ public class FinancialToolsService {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private record TxItem(String description, BigDecimal amount, String type, String category,
+    private record TxItem(String id, String description, BigDecimal amount, String type, String category,
                            LocalDate date, String account, String currency) {
     }
 
@@ -246,6 +330,7 @@ public class FinancialToolsService {
         List<TxItem> result = new ArrayList<>();
         for (JsonNode item : page.path("content")) {
             result.add(new TxItem(
+                    item.path("id").asText(""),
                     item.path("description").asText(""),
                     item.path("amount").decimalValue(),
                     item.path("type").asText(""),
