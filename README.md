@@ -429,61 +429,71 @@ tp-dan-2026/
 
 ## Kubernetes
 
-Los manifiestos en `k8s/` están listos para cualquier cluster K8s (Minikube, EKS, GKE, AKS).
+Los manifiestos en `k8s/` están listos para cualquier cluster K8s (k3d, k3s, EKS, GKE, AKS).
 
 ### Arquitectura de red en K8s
 
 | Servicio | Tipo | Acceso externo |
 |---|---|---|
-| api-gateway | `NodePort 30080` | `<minikube-ip>:30080` |
-| frontend-service | `NodePort 30300` | `<minikube-ip>:30300` |
+| api-gateway | `NodePort 30080` | `localhost:30080` |
+| frontend-service | `NodePort 30300` | `localhost:30300` |
 | El resto (infraestructura, observabilidad) | `ClusterIP` | port-forward |
 
 ---
 
-### Probar en local con Minikube
+### Probar en local con k3d
 
-**Requisitos:** [Minikube](https://minikube.sigs.k8s.io/docs/start/) y kubectl instalados.
+**Requisitos:** [k3d](https://k3d.io/#installation) y kubectl instalados.
+
+```powershell
+winget install k3d
+```
 
 ---
 
-#### Paso 1 — Arrancar Minikube con recursos suficientes
+#### Paso 1 — Crear el cluster k3d con los NodePorts mapeados
 
 ```powershell
-minikube start --memory=6144 --cpus=4
-minikube status
+k3d cluster create local-test `
+    --port "30080:30080@server:0" `
+    --port "30300:30300@server:0"
 ```
 
-> **Importante:** `minikube start` debería cambiar el contexto de kubectl automáticamente, pero si tenés Docker Desktop instalado puede quedar apuntando al cluster equivocado. Verificar y corregir:
+> k3d crea el cluster dentro de Docker y configura el contexto de kubectl automáticamente.
+> Verificar:
 >
 > ```powershell
-> # Verificar contexto actual
 > kubectl config current-context
-> # Debe decir "minikube". Si dice "docker-desktop", cambiar:
-> kubectl config use-context minikube
+> # Debe decir "k3d-local-test"
 > ```
 
 ---
 
-#### Paso 2 — Apuntar Docker al daemon interno de Minikube
+#### Paso 2 — Buildear las imágenes e importarlas al cluster
 
-Este paso hace que las imágenes buildeadas queden dentro del cluster en vez de en tu Docker local.
+A diferencia de Minikube, k3d no comparte el daemon de Docker. Hay que buildear normalmente y luego importar las imágenes al cluster.
 
 ```powershell
-# PowerShell
-minikube docker-env | Invoke-Expression
+# Buildear
+docker build -f microservices/eureka-server/Dockerfile       -t pesito/eureka-server:latest       ./microservices
+docker build -f microservices/api-gateway/Dockerfile         -t pesito/api-gateway:latest         ./microservices
+docker build -f microservices/auth-service/Dockerfile        -t pesito/auth-service:latest        ./microservices
+docker build -f microservices/transaction-service/Dockerfile -t pesito/transaction-service:latest ./microservices
+docker build -f microservices/ai-service/Dockerfile          -t pesito/ai-service:latest          ./microservices
+docker build -f microservices/frontend-service/Dockerfile    -t pesito/frontend-service:latest    ./microservices/frontend-service
 
-# Verificar que apunta al daemon correcto (debe mostrar "minikube")
-docker info | Select-String "Name"
+# Importar al cluster
+k3d image import `
+    pesito/eureka-server:latest `
+    pesito/api-gateway:latest `
+    pesito/auth-service:latest `
+    pesito/transaction-service:latest `
+    pesito/ai-service:latest `
+    pesito/frontend-service:latest `
+    -c local-test
 ```
 
-```bash
-# Linux/Mac/WSL
-eval $(minikube docker-env)
-docker info | grep Name
-```
-
-> Este paso es **por sesión de terminal**. Si abrís una terminal nueva, repetilo antes de buildear.
+> El import es necesario cada vez que rebuildeás una imagen. El script `dev-k8s.ps1` automatiza ambos pasos.
 
 ---
 
@@ -592,15 +602,10 @@ kubectl describe pod -n pesito -l app=<nombre-del-servicio>
 
 #### Paso 7 — Acceder a los servicios
 
-```bash
-minikube ip
-minikube service api-gateway      -n pesito
-minikube service frontend-service -n pesito
-```
+Los NodePorts están mapeados a `localhost` gracias al `--port` del cluster create:
 
-NodePorts fijos:
-- API Gateway → `http://<minikube-ip>:30080`
-- Frontend → `http://<minikube-ip>:30300`
+- API Gateway → `http://localhost:30080`
+- Frontend → `http://localhost:30300`
 
 **Herramientas internas (port-forward):**
 
@@ -626,8 +631,8 @@ kubectl delete namespace pesito
 
 | Servicio | Puerto interno | Acceso desde el host |
 |---|---|---|
-| API Gateway | `8080` | `<minikube-ip>:30080` (NodePort) |
-| Frontend | `3000` | `<minikube-ip>:30300` (NodePort) |
+| API Gateway | `8080` | `localhost:30080` (NodePort) |
+| Frontend | `3000` | `localhost:30300` (NodePort) |
 | Eureka Dashboard | `8761` | port-forward → `localhost:8761` |
 | RabbitMQ Management | `15672` | port-forward → `localhost:15672` |
 | Grafana | `3000` | port-forward → `localhost:3000` |
@@ -665,7 +670,7 @@ docker push tu-org/pesito-frontend:1.0.0
 En cada archivo de `k8s/microservices/` cambiar el campo `image:`:
 
 ```yaml
-# Antes (local Minikube)
+# Antes (local k3d)
 image: pesito/auth-service:latest
 
 # Después (producción)
@@ -684,12 +689,12 @@ spec:
 
 ## Troubleshooting
 
-**Los pods se crearon pero en Minikube no aparece nada**
+**Los pods se crearon pero el cluster está vacío**
 
-kubectl apuntaba a Docker Desktop en vez de Minikube cuando se aplicaron los manifiestos.
+kubectl apuntaba a otro contexto (ej: docker-desktop) cuando se aplicaron los manifiestos.
 
 ```powershell
-kubectl config use-context minikube
+kubectl config use-context k3d-local-test
 kubectl get all -n pesito
 # Si está vacío, volver al Paso 5 y aplicar los manifiestos de nuevo
 ```

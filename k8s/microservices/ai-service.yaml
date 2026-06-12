@@ -83,6 +83,13 @@ spec:
                 secretKeyRef:
                   name: bb-secrets
                   key: AI_DB_PASSWORD
+            - name: AUTH_HOST
+              value: auth-service
+            - name: INTERNAL_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: INTERNAL_API_SECRET
           readinessProbe:
             httpGet:
               path: /actuator/health

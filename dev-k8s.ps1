@@ -2,9 +2,6 @@ param(
     [switch]$SkipBuild
 )
 
-# Apuntar docker al daemon de minikube
-minikube docker-env | Invoke-Expression
-
 # Namespace, secrets y configmaps
 kubectl apply -f k8s/00-namespace.yaml
 kubectl apply -f k8s/01-secrets.yaml
@@ -17,6 +14,16 @@ if (-not $SkipBuild) {
     docker build -f microservices/eureka-server/Dockerfile        -t pesito/eureka-server:latest        ./microservices
     docker build -f microservices/api-gateway/Dockerfile          -t pesito/api-gateway:latest          ./microservices
     docker build -f microservices/frontend-service/Dockerfile     -t pesito/frontend-service:latest     ./microservices/frontend-service
+
+    # Importar imágenes al cluster k3d (k3d no comparte el daemon de Docker)
+    k3d image import `
+        pesito/ai-service:latest `
+        pesito/auth-service:latest `
+        pesito/transaction-service:latest `
+        pesito/eureka-server:latest `
+        pesito/api-gateway:latest `
+        pesito/frontend-service:latest `
+        -c local-test
 }
 
 kubectl apply -f k8s/infrastructure/
