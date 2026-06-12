@@ -60,6 +60,15 @@ spec:
               value: eureka-server
             - name: EUREKA_INSTANCE_PREFERIPADDRESS
               value: "true"
+            - name: TRANSACTION_HOST
+              value: transaction-service
+            - name: AUTH_HOST
+              value: auth-service
+            - name: INTERNAL_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: INTERNAL_API_SECRET
             - name: POSTGRES_HOST
               value: postgres
             - name: POSTGRES_DB

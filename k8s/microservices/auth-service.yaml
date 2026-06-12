@@ -51,6 +51,16 @@ spec:
                 secretKeyRef:
                   name: bb-secrets
                   key: JWT_SECRET
+            - name: APP_ENCRYPTION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: APP_ENCRYPTION_SECRET
+            - name: INTERNAL_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: INTERNAL_API_SECRET
             - name: RABBITMQ_HOST
               value: rabbitmq
             - name: RABBITMQ_USER
