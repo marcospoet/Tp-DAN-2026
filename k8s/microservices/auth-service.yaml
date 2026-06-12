@@ -102,16 +102,6 @@ spec:
               value: "https://api.pesito.dev"
             - name: APP_FRONTEND_URL
               value: "https://pesito.dev"
-            - name: APP_ENCRYPTION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: bb-secrets
-                  key: APP_ENCRYPTION_SECRET
-            - name: INTERNAL_API_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: bb-secrets
-                  key: INTERNAL_API_SECRET
           readinessProbe:
             httpGet:
               path: /actuator/health
