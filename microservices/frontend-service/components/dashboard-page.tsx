@@ -12,6 +12,7 @@ import { useTransactions, type RecurringFrequency } from "@/lib/transactions-con
 import { useSettings, type TimeFilter, type ExchangeRateType } from "@/lib/settings-context"
 import { callAI, transcribeAudioAttachment, type AIAttachment } from "@/lib/ai"
 import { getToken } from "@/lib/api-client"
+import { localIsoDate } from "@/lib/utils"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
 import { useChatHandler } from "@/hooks/use-chat-handler"
 import type { DateRange } from "react-day-picker"
@@ -392,7 +393,7 @@ export function DashboardPage() {
       type: "expense",
       category: "General",
       icon: "ShoppingCart",
-      date: new Date().toISOString().split("T")[0],
+      date: localIsoDate(),
       currency: newCurrency,
       exRateType: newExRateType,
       manualRate: newManualRate,
@@ -823,7 +824,7 @@ export function DashboardPage() {
       type: tx.type,
       category: tx.category,
       icon: tx.icon,
-      date: new Date(tx.date).toISOString().split("T")[0],
+      date: localIsoDate(new Date(tx.date)),
       currency: tx.currency,
       exRateType: (tx.exchangeRateType as ExchangeRateType) ?? "BLUE",
       manualRate: tx.txRate ? String(tx.txRate) : "",

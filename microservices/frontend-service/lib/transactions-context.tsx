@@ -58,9 +58,21 @@ function sanitizeField(value: string | undefined | null, maxLen: number): string
 }
 
 // ── Date → ISO "YYYY-MM-DD" ───────────────────────────────────────────────────
+// Usa la fecha LOCAL, no toISOString() (UTC): en Argentina (UTC-3), después de
+// las 21:00 la fecha UTC ya es el día siguiente y la transacción quedaría
+// fechada a futuro.
 function toIsoDate(d: Date | string): string {
+  if (typeof d === "string") {
+    // Ya viene como "YYYY-MM-DD" → devolver tal cual (parsearla con new Date()
+    // la interpretaría como medianoche UTC y podría correrla un día)
+    const m = d.match(/^\d{4}-\d{2}-\d{2}/)
+    if (m) return m[0]
+  }
   const date = d instanceof Date ? d : new Date(d)
-  return date.toISOString().split("T")[0]
+  const y = date.getFullYear()
+  const mo = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${y}-${mo}-${day}`
 }
 
 // ── Backend response (camelCase) → Transaction ────────────────────────────────
