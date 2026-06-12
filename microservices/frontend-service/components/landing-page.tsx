@@ -330,7 +330,9 @@ function FloatingChip({ className, delay = 0, dur = 4.5, children }: {
 function PhoneShowcase() {
   const tier = useContext(PerfContext)
   return (
-    <section className="cv-auto relative px-5 pb-20 md:pb-28 flex flex-col items-center overflow-x-clip">
+    // pt-10: la flotación sube el teléfono ~12px por encima de su posición y
+    // el paint containment de cv-auto recorta lo que salga de la sección
+    <section className="cv-auto relative px-5 pt-10 pb-20 md:pb-28 flex flex-col items-center overflow-x-clip">
       <div style={{ perspective: 1200 }}>
         <motion.div
           className="relative"
@@ -381,20 +383,27 @@ function PhoneShowcase() {
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
           >
             <TiltCard maxTilt={5}>
-              {/* Bezel */}
+              {/* Bezel — extra top padding so the upper frame is always visible
+                  (the screenshot's dark header blends with a thin bezel) */}
               <div
-                className="relative rounded-[2.6rem] border border-border/70 p-2"
+                className="relative rounded-[2.6rem] border border-border/70 px-2 pb-2 pt-7"
                 style={{
-                  background: "linear-gradient(160deg, oklch(0.28 0.01 260) 0%, oklch(0.16 0.01 260) 100%)",
-                  boxShadow: "0 24px 70px oklch(0 0 0 / 0.55), inset 0 1px 0 oklch(1 0 0 / 0.08)",
+                  background: "linear-gradient(160deg, oklch(0.3 0.01 260) 0%, oklch(0.17 0.01 260) 100%)",
+                  boxShadow: "0 24px 70px oklch(0 0 0 / 0.55), inset 0 1px 0 oklch(1 0 0 / 0.1)",
                 }}
               >
+                {/* Speaker + camera in the top bezel */}
+                <div className="absolute top-[13px] left-1/2 -translate-x-1/2 flex items-center gap-2">
+                  <div className="w-12 h-[5px] rounded-full bg-background/70" />
+                  <div className="w-[7px] h-[7px] rounded-full bg-background/70 ring-1 ring-border/40" />
+                </div>
+
                 {/* Side buttons */}
                 <div className="absolute -left-[2px] top-24 w-[3px] h-10 rounded-l-full bg-border/80" />
                 <div className="absolute -left-[2px] top-36 w-[3px] h-14 rounded-l-full bg-border/80" />
                 <div className="absolute -right-[2px] top-28 w-[3px] h-16 rounded-r-full bg-border/80" />
 
-                <div className="relative rounded-[2rem] overflow-hidden">
+                <div className="relative rounded-t-xl rounded-b-[2rem] overflow-hidden">
                   <Image
                     src="/dashboard.png"
                     alt="Dashboard de Pesito: balance del mes, ingresos y gastos, movimientos registrados y barra de registro por voz"
