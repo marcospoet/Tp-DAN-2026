@@ -2,32 +2,31 @@
 
 import { useState, useEffect } from "react"
 
-/** Returns `true` when the browser is likely running without GPU acceleration
- *  (hardware acceleration disabled, software renderer, or user prefers reduced motion).
- *  Use this to disable expensive visual effects like blur filters, 3-D transforms,
- *  and continuous rAF loops that cause jank on CPU-only rendering paths.
+/** Performance tier for visual effects:
+ *  - "full": desktop with hardware acceleration — all effects (blur filters,
+ *    SVG gooey morph, 3-D tilt, cursor spotlight, springs).
+ *  - "lite": mobile devices — only compositor-cheap animations (transform/
+ *    opacity: entrance fades, counters, CSS marquee, floating coins). Blur
+ *    filters, SVG filters and pointer-driven effects are skipped.
+ *  - "off": user prefers reduced motion, or the browser is rendering on CPU
+ *    (SwiftShader / llvmpipe / no WebGL) — no continuous animations at all.
  */
-export function usePerformanceMode(): boolean {
-  const [lowPerf, setLowPerf] = useState(false)
+export type PerfTier = "full" | "lite" | "off"
+
+export function usePerformanceTier(): PerfTier {
+  const [tier, setTier] = useState<PerfTier>("full")
 
   useEffect(() => {
     // 1. Respect user's accessibility preference
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setLowPerf(true)
+      setTier("off")
       return
     }
 
-    // 2. Mobile devices (touch + small screen) — GPU es real pero la CPU y el ancho
-    //    de banda de memoria son mucho más limitados que en desktop. Las animaciones
-    //    pesadas (SVG filters, spring physics, marquees) causan jank notorio en mobile.
-    if (window.matchMedia("(max-width: 768px) and (pointer: coarse)").matches) {
-      setLowPerf(true)
-      return
-    }
-
-    // 3. Detect software (CPU-only) WebGL renderer.
+    // 2. Detect software (CPU-only) WebGL renderer.
     //    When Chrome's "Use hardware acceleration when available" is OFF,
-    //    WebGL falls back to SwiftShader (software renderer).
+    //    WebGL falls back to SwiftShader (software renderer). Even transform
+    //    animations jank there, so everything goes off.
     try {
       const canvas = document.createElement("canvas")
       const gl = (
@@ -36,8 +35,7 @@ export function usePerformanceMode(): boolean {
       ) as WebGLRenderingContext | null
 
       if (!gl) {
-        // No WebGL at all → definitely CPU-only
-        setLowPerf(true)
+        setTier("off")
         return
       }
 
@@ -46,14 +44,30 @@ export function usePerformanceMode(): boolean {
         const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) as string
         // SwiftShader (Chrome SW), llvmpipe / softpipe (Mesa SW), Microsoft Basic Render Driver
         if (/swiftshader|llvmpipe|softpipe|virgl|microsoft basic render/i.test(renderer)) {
-          setLowPerf(true)
+          setTier("off")
           return
         }
       }
     } catch {
       // ignore detection errors — assume GPU is fine
     }
+
+    // 3. Mobile devices (touch + small screen) — GPU es real pero la CPU y el
+    //    ancho de banda de memoria son más limitados que en desktop. Las
+    //    animaciones transform/opacity corren en el compositor y son baratas;
+    //    lo que causa jank son los blur filters, SVG filters y spring physics.
+    if (window.matchMedia("(max-width: 768px) and (pointer: coarse)").matches) {
+      setTier("lite")
+      return
+    }
+
+    setTier("full")
   }, [])
 
-  return lowPerf
+  return tier
+}
+
+/** Legacy boolean API: `true` when any effect reduction applies (tier !== "full"). */
+export function usePerformanceMode(): boolean {
+  return usePerformanceTier() !== "full"
 }

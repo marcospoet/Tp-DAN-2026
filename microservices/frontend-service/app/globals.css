@@ -198,6 +198,31 @@
   animation: gradient-rotate 3s linear infinite;
 }
 
+/* Marquee de la landing — animación CSS pura sobre transform: corre en el
+   compositor (barata incluso en mobile, sin JS por frame). El play-state se
+   controla desde el componente para pausarla fuera del viewport. */
+@keyframes marquee-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-33.333%, 0, 0); }
+}
+
+.marquee-track {
+  animation: marquee-scroll 38s linear infinite;
+  will-change: transform;
+}
+
+.marquee-reverse {
+  animation-direction: reverse;
+}
+
+/* Secciones below-the-fold: el browser no las renderiza hasta que se acercan
+   al viewport. contain-intrinsic-size reserva una altura estimada para que
+   el scrollbar no salte. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 700px;
+}
+
 .glass {
   background: oklch(0.17 0.01 260 / 0.85);
   backdrop-filter: blur(12px);

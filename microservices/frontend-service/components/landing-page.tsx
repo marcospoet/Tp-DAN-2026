@@ -11,15 +11,17 @@ import {
   useMotionTemplate,
   animate,
   AnimatePresence,
+  MotionConfig,
 } from "framer-motion"
 import {
   Sparkles, Mic, ArrowRight, Coins,
   Download, Smartphone, DollarSign, Camera, MessageCircle,
   ShieldCheck, Repeat, Github, TrendingUp, Zap, Share, Check,
 } from "lucide-react"
+import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 import { GooeyText } from "@/components/ui/gooey-text-morphing"
-import { usePerformanceMode } from "@/hooks/use-performance-mode"
+import { usePerformanceTier, type PerfTier } from "@/hooks/use-performance-mode"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface BeforeInstallPromptEvent extends Event {
@@ -29,9 +31,10 @@ interface BeforeInstallPromptEvent extends Event {
 
 const E = [0.22, 1, 0.36, 1] as const
 
-// Shared context — LandingPage sets this; sub-components read it to skip
-// expensive GPU effects when hardware acceleration is unavailable.
-const PerfContext = createContext(false)
+// Shared context — LandingPage sets this; sub-components read it to decide
+// which effects to run: "full" = everything, "lite" (mobile) = only
+// compositor-cheap transform/opacity animations, "off" = nothing continuous.
+const PerfContext = createContext<PerfTier>("full")
 
 // ── Text Scramble hook ─────────────────────────────────────────────────────────
 const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$€#@"
@@ -89,17 +92,17 @@ function ScrollProgressBar() {
 
 // ── CursorSpotlight ────────────────────────────────────────────────────────────
 function CursorSpotlight() {
-  const lowPerf = useContext(PerfContext)
+  const tier = useContext(PerfContext)
   const mx = useMotionValue(-400)
   const my = useMotionValue(-400)
   useEffect(() => {
-    if (lowPerf) return
+    if (tier !== "full") return
     const h = (e: MouseEvent) => { mx.set(e.clientX); my.set(e.clientY) }
     window.addEventListener("mousemove", h)
     return () => window.removeEventListener("mousemove", h)
-  }, [mx, my, lowPerf])
+  }, [mx, my, tier])
   const bg = useMotionTemplate`radial-gradient(380px circle at ${mx}px ${my}px, oklch(0.72 0.19 160 / 0.055), transparent 65%)`
-  if (lowPerf) return null
+  if (tier !== "full") return null
   return (
     <motion.div
       className="pointer-events-none fixed inset-0 z-[5] hidden lg:block"
@@ -111,7 +114,7 @@ function CursorSpotlight() {
 // ── TiltCard ───────────────────────────────────────────────────────────────────
 // 3D perspective tilt with spring physics — inspired by 21st.dev InteractiveCard
 function TiltCard({ children, className, maxTilt = 7 }: { children: React.ReactNode; className?: string; maxTilt?: number }) {
-  const lowPerf = useContext(PerfContext)
+  const tier = useContext(PerfContext)
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const xs = useSpring(x, { stiffness: 150, damping: 20 })
@@ -120,8 +123,9 @@ function TiltCard({ children, className, maxTilt = 7 }: { children: React.ReactN
   const rotY = useTransform(xs, [-0.5, 0.5], [`-${maxTilt}deg`, `${maxTilt}deg`])
   const sc = useSpring(1, { stiffness: 200, damping: 22 })
 
-  // No 3-D transforms or spring physics when GPU acceleration is off
-  if (lowPerf) return <div className={className}>{children}</div>
+  // 3-D transforms + spring physics are hover-driven: pointless on touch
+  // devices and janky without GPU — desktop "full" tier only.
+  if (tier !== "full") return <div className={className}>{children}</div>
 
   return (
     <div style={{ perspective: "1000px" }} className={className}>
@@ -167,8 +171,9 @@ function AnimatedNumber({ target, prefix = "", suffix = "", className = "" }: {
 
 // ── FloatingCoin ───────────────────────────────────────────────────────────────
 function FloatingCoin({ delay, x, size, dur }: { delay: number; x: string; size: number; dur: number }) {
-  const lowPerf = useContext(PerfContext)
-  if (lowPerf) return null
+  // Pure transform/opacity → compositor-cheap, runs on mobile ("lite") too
+  const tier = useContext(PerfContext)
+  if (tier === "off") return null
   return (
     <motion.div
       className="pointer-events-none absolute bottom-0"
@@ -184,11 +189,13 @@ function FloatingCoin({ delay, x, size, dur }: { delay: number; x: string; size:
 
 // ── MarqueeRow ─────────────────────────────────────────────────────────────────
 function MarqueeRow({ items, dir }: { items: string[]; dir: 1 | -1 }) {
-  const lowPerf = useContext(PerfContext)
+  const tier = useContext(PerfContext)
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref)
   const tripled = [...items, ...items, ...items]
 
-  // En mobile/low-perf: lista estática sin animación continua
-  if (lowPerf) {
+  // Sin animación solo cuando todo está apagado (reduced motion / sin GPU)
+  if (tier === "off") {
     return (
       <div className="flex w-max">
         {items.map((item, i) => (
@@ -201,11 +208,13 @@ function MarqueeRow({ items, dir }: { items: string[]; dir: 1 | -1 }) {
     )
   }
 
+  // Animación CSS pura (keyframes en globals.css): corre en el compositor sin
+  // JS por frame, y se pausa cuando la fila sale del viewport.
   return (
-    <motion.div
-      className="flex w-max"
-      animate={{ x: dir === 1 ? ["0%", "-33.33%"] : ["-33.33%", "0%"] }}
-      transition={{ duration: 38, repeat: Infinity, ease: "linear" }}
+    <div
+      ref={ref}
+      className={`flex w-max marquee-track ${dir === -1 ? "marquee-reverse" : ""}`}
+      style={{ animationPlayState: inView ? "running" : "paused" }}
     >
       {tripled.map((item, i) => (
         <div key={i} className="flex items-center mx-6 whitespace-nowrap text-sm text-muted-foreground/55">
@@ -213,7 +222,7 @@ function MarqueeRow({ items, dir }: { items: string[]; dir: 1 | -1 }) {
           {item}
         </div>
       ))}
-    </motion.div>
+    </div>
   )
 }
 
@@ -289,25 +298,162 @@ function CategoriesPills() {
   )
 }
 
+// ── PhoneShowcase ──────────────────────────────────────────────────────────────
+// Real product screenshot inside a CSS phone frame. All the motion here is
+// transform/opacity only (compositor-cheap), so it runs on mobile too; the
+// only "full"-tier exclusive is the blurred glow behind the phone.
+
+// Floating notification chip around the phone — gentle y-loop, staggered entrance
+function FloatingChip({ className, delay = 0, dur = 4.5, children }: {
+  className?: string; delay?: number; dur?: number; children: React.ReactNode
+}) {
+  const tier = useContext(PerfContext)
+  return (
+    <motion.div
+      className={`absolute z-10 ${className ?? ""}`}
+      initial={{ opacity: 0, y: 18, scale: 0.85 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ delay: 0.35 + delay, duration: 0.55, ease: E }}
+    >
+      <motion.div
+        className="flex items-center gap-2 rounded-2xl border border-border/70 bg-card/95 backdrop-blur-sm px-3.5 py-2.5 shadow-xl"
+        animate={tier === "off" ? undefined : { y: [0, -9, 0] }}
+        transition={{ duration: dur, repeat: Infinity, ease: "easeInOut", delay }}
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function PhoneShowcase() {
+  const tier = useContext(PerfContext)
+  return (
+    <section className="cv-auto relative px-5 pb-20 md:pb-28 flex flex-col items-center overflow-x-clip">
+      <div style={{ perspective: 1200 }}>
+        <motion.div
+          className="relative"
+          initial={{ opacity: 0, y: 56, rotateX: 16, scale: 0.94 }}
+          whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.9, ease: E }}
+        >
+          {/* Glow behind the phone — blur filter, "full" tier only */}
+          {tier === "full" && (
+            <div
+              className="pointer-events-none absolute -inset-10 rounded-full"
+              style={{ background: "radial-gradient(ellipse, oklch(0.72 0.19 160 / 0.22) 0%, transparent 70%)", filter: "blur(60px)" }}
+            />
+          )}
+
+          {/* Floating chips — mirror real app events around the phone */}
+          <FloatingChip className="-left-16 sm:-left-28 top-16" delay={0} dur={4.2}>
+            <span className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 text-primary" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[11px] font-bold text-primary whitespace-nowrap">+ $100.000</p>
+              <p className="text-[10px] text-muted-foreground whitespace-nowrap">Cobro · Trabajo</p>
+            </div>
+          </FloatingChip>
+
+          <FloatingChip className="-right-14 sm:-right-28 top-40" delay={0.8} dur={5}>
+            <span className="w-7 h-7 rounded-full bg-violet-400/15 flex items-center justify-center shrink-0">
+              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[11px] font-bold text-foreground whitespace-nowrap">✓ Clasificado</p>
+              <p className="text-[10px] text-muted-foreground whitespace-nowrap">Nafta · Transporte</p>
+            </div>
+          </FloatingChip>
+
+          <FloatingChip className="-left-10 sm:-left-24 bottom-28" delay={1.6} dur={4.6}>
+            <span className="w-7 h-7 rounded-full bg-emerald-400/15 flex items-center justify-center shrink-0">
+              <Mic className="w-3.5 h-3.5 text-emerald-400" />
+            </span>
+            <p className="text-[10px] text-muted-foreground italic whitespace-nowrap">&ldquo;Pagué 12.000 en el súper&rdquo;</p>
+          </FloatingChip>
+
+          {/* Phone: continuous gentle float (transform-only) + hover tilt on desktop */}
+          <motion.div
+            animate={tier === "off" ? undefined : { y: [0, -12, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <TiltCard maxTilt={5}>
+              {/* Bezel */}
+              <div
+                className="relative rounded-[2.6rem] border border-border/70 p-2"
+                style={{
+                  background: "linear-gradient(160deg, oklch(0.28 0.01 260) 0%, oklch(0.16 0.01 260) 100%)",
+                  boxShadow: "0 24px 70px oklch(0 0 0 / 0.55), inset 0 1px 0 oklch(1 0 0 / 0.08)",
+                }}
+              >
+                {/* Side buttons */}
+                <div className="absolute -left-[2px] top-24 w-[3px] h-10 rounded-l-full bg-border/80" />
+                <div className="absolute -left-[2px] top-36 w-[3px] h-14 rounded-l-full bg-border/80" />
+                <div className="absolute -right-[2px] top-28 w-[3px] h-16 rounded-r-full bg-border/80" />
+
+                <div className="relative rounded-[2rem] overflow-hidden">
+                  <Image
+                    src="/dashboard.png"
+                    alt="Dashboard de Pesito: balance del mes, ingresos y gastos, movimientos registrados y barra de registro por voz"
+                    width={540}
+                    height={1169}
+                    sizes="(max-width: 640px) 270px, 320px"
+                    className="w-[270px] sm:w-[320px] h-auto select-none"
+                    draggable={false}
+                  />
+                  {/* Periodic shine sweep across the screen (transform-only) */}
+                  {tier !== "off" && (
+                    <motion.div
+                      className="pointer-events-none absolute inset-y-0 w-1/2 -skew-x-12"
+                      style={{ background: "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.07), transparent)" }}
+                      initial={{ x: "-150%" }}
+                      animate={{ x: "350%" }}
+                      transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 4.5, ease: "easeInOut" }}
+                    />
+                  )}
+                </div>
+              </div>
+            </TiltCard>
+          </motion.div>
+        </motion.div>
+      </div>
+
+      <motion.p
+        className="mt-8 text-sm text-muted-foreground max-w-xs text-center leading-relaxed"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.3, duration: 0.6 }}
+      >
+        Balance, movimientos y registro por voz —{" "}
+        <span className="text-foreground font-medium">todo en una pantalla</span>.
+      </motion.p>
+    </section>
+  )
+}
+
 // ── GlowCard (for smaller feature cards) ──────────────────────────────────────
 function GlowCard({ children, className, glow = "oklch(0.72 0.19 160 / 0.13)", delay = 0 }: {
   children: React.ReactNode; className?: string; glow?: string; delay?: number
 }) {
-  const lowPerf = useContext(PerfContext)
+  const tier = useContext(PerfContext)
   const ref = useRef<HTMLDivElement>(null)
   const mx = useMotionValue(0)
   const my = useMotionValue(0)
   const bg = useMotionTemplate`radial-gradient(200px circle at ${mx}px ${my}px, ${glow}, transparent 80%)`
   return (
     <motion.div ref={ref} className={`group relative rounded-3xl border border-border bg-card overflow-hidden ${className ?? ""}`}
-      onMouseMove={lowPerf ? undefined : e => {
+      onMouseMove={tier !== "full" ? undefined : e => {
         if (!ref.current) return
         const r = ref.current.getBoundingClientRect()
         mx.set(e.clientX - r.left); my.set(e.clientY - r.top)
       }}
       initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.6, delay, ease: E }}>
-      {!lowPerf && <motion.div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: bg }} />}
+      {tier === "full" && <motion.div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: bg }} />}
       {children}
     </motion.div>
   )
@@ -323,7 +469,7 @@ export function LandingPage() {
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSBanner, setShowIOSBanner] = useState(false)
 
-  const lowPerf = usePerformanceMode()
+  const perfTier = usePerformanceTier()
 
   const { scrollY } = useScroll()
   const navOpacity = useTransform(scrollY, [0, 70], [0, 1])
@@ -353,13 +499,14 @@ export function LandingPage() {
   const ROW2 = ["Gastos fijos mensuales", "Chat financiero IA", "12 meses de historial", "PWA offline", "Datos seguros", "Cotización en tiempo real", "Exportar CSV"]
 
   return (
-    <PerfContext.Provider value={lowPerf}>
+    <PerfContext.Provider value={perfTier}>
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen flex flex-col overflow-x-hidden bg-background">
       <ScrollProgressBar />
       <CursorSpotlight />
 
-      {/* ── Fixed aurora bg — skipped when GPU acceleration is unavailable ──── */}
-      {!lowPerf && (
+      {/* ── Fixed aurora bg — animated blur orbs need a real GPU ("full") ──── */}
+      {perfTier === "full" && (
         <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
           <motion.div
             className="absolute rounded-full"
@@ -370,6 +517,16 @@ export function LandingPage() {
           <div style={{ position: "absolute", width: 600, height: 600, top: "30%", left: "-15%", background: "radial-gradient(ellipse, oklch(0.6 0.22 285 / 0.11) 0%, transparent 70%)", filter: "blur(100px)" }} />
           <div style={{ position: "absolute", width: 500, height: 500, top: "45%", right: "-12%", background: "radial-gradient(ellipse, oklch(0.68 0.17 175 / 0.09) 0%, transparent 70%)", filter: "blur(90px)" }} />
           <div style={{ position: "absolute", width: 700, height: 400, bottom: "5%", left: "15%", background: "radial-gradient(ellipse, oklch(0.72 0.19 160 / 0.07) 0%, transparent 70%)", filter: "blur(110px)" }} />
+        </div>
+      )}
+
+      {/* ── Lite aurora (mobile) — static radial gradients, no blur filter,
+             no animation: one-time paint, zero per-frame cost ─────────────── */}
+      {perfTier === "lite" && (
+        <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+          <div style={{ position: "absolute", width: "140%", height: "60%", top: "-20%", left: "-20%", background: "radial-gradient(ellipse, oklch(0.72 0.19 160 / 0.12) 0%, transparent 70%)" }} />
+          <div style={{ position: "absolute", width: "90%", height: "40%", top: "35%", left: "-30%", background: "radial-gradient(ellipse, oklch(0.6 0.22 285 / 0.08) 0%, transparent 70%)" }} />
+          <div style={{ position: "absolute", width: "100%", height: "35%", bottom: "0%", right: "-25%", background: "radial-gradient(ellipse, oklch(0.68 0.17 175 / 0.07) 0%, transparent 70%)" }} />
         </div>
       )}
 
@@ -571,6 +728,11 @@ export function LandingPage() {
       </motion.section>
 
       {/* ══════════════════════════════════════════════════════════════════════
+          ── PRODUCT SHOWCASE — real dashboard screenshot ─────────────────────
+          ══════════════════════════════════════════════════════════════════════ */}
+      <PhoneShowcase />
+
+      {/* ══════════════════════════════════════════════════════════════════════
           ── DUAL MARQUEE ─────────────────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
       <div
@@ -587,7 +749,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── STATEMENT ────────────────────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="px-5 py-20 md:py-32 lg:px-12 flex flex-col items-center text-center">
+      <section className="cv-auto px-5 py-20 md:py-32 lg:px-12 flex flex-col items-center text-center">
         <motion.p
           className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary/50 mb-16"
           initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
@@ -601,7 +763,7 @@ export function LandingPage() {
             cooldownTime={0.5}
             className="h-full"
             textClassName="font-black tracking-tighter text-foreground"
-            disabled={lowPerf}
+            disabled={perfTier !== "full"}
           />
         </div>
         <motion.p
@@ -616,7 +778,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── HOW IT WORKS — TiltCards ─────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="px-5 pb-20 md:pb-32 lg:px-12">
+      <section className="cv-auto px-5 pb-20 md:pb-32 lg:px-12">
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             {
@@ -655,7 +817,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── STATS — Animated numbers ─────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="relative px-5 py-20 md:py-28 lg:px-12 overflow-hidden">
+      <section className="cv-auto relative px-5 py-20 md:py-28 lg:px-12 overflow-hidden">
         {/* Subtle different bg */}
         <div className="absolute inset-0 bg-primary/[0.03] border-y border-primary/10" />
         <div className="absolute inset-0" style={{
@@ -695,7 +857,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── FEATURES BENTO — TiltCard + GlowCard ────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="px-5 py-20 md:py-32 lg:px-12">
+      <section className="cv-auto px-5 py-20 md:py-32 lg:px-12">
         <div className="max-w-5xl mx-auto">
           <motion.p
             className="text-center text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3"
@@ -842,7 +1004,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── ARGENTINA SECTION ────────────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="px-5 py-20 md:py-32 lg:px-12">
+      <section className="cv-auto px-5 py-20 md:py-32 lg:px-12">
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
             <motion.p className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary/50 mb-5"
@@ -904,7 +1066,7 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── FINAL CTA — card with pulsing logo ──────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="px-5 pb-24 md:pb-36 lg:px-12">
+      <section className="cv-auto px-5 pb-24 md:pb-36 lg:px-12">
         <motion.div
           initial={{ opacity: 0, y: 48, scale: 0.96 }}
           whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -1029,6 +1191,7 @@ export function LandingPage() {
       </footer>
 
     </div>
+    </MotionConfig>
     </PerfContext.Provider>
   )
 }
