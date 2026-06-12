@@ -83,6 +83,25 @@ spec:
                 secretKeyRef:
                   name: bb-secrets
                   key: AI_DB_PASSWORD
+            # Observabilidad Langfuse (opcional: sin keys queda deshabilitado)
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+                  optional: true
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: LANGFUSE_SECRET_KEY
+                  optional: true
+            - name: LANGFUSE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: LANGFUSE_HOST
+                  optional: true
           readinessProbe:
             httpGet:
               path: /actuator/health
