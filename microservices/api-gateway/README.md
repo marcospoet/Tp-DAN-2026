@@ -62,9 +62,29 @@ spring.cloud.gateway.routes[1].predicates[0]=Path=/api/transactions/**
 spring.cloud.gateway.routes[2].id=ai-service
 spring.cloud.gateway.routes[2].uri=lb://ai-service
 spring.cloud.gateway.routes[2].predicates[0]=Path=/api/ai/**
+
+# Rutas adicionales: /api/rates (transaction-service) y OAuth2
+# (/oauth2/**, /login/oauth2/** → auth-service)
 ```
 
-> **TODO (Fase 3):** agregar filtros `CircuitBreaker` a cada ruta y crear endpoints de fallback en `FallbackController.java`.
+Los filtros `CircuitBreaker` + `Retry` están aplicados por ruta (config Java en
+`ResilienceConfig.java`) con fallbacks en `FallbackController.java`.
+
+---
+
+## CORS
+
+```properties
+# Origins configurables por env var; whitelist explícita de headers.
+# X-User-Id NO se acepta del navegador: lo inyecta el gateway desde el JWT.
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedOrigins=${CORS_ALLOWED_ORIGINS:http://localhost:3001,http://localhost:3000}
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedMethods=GET,POST,PUT,DELETE,OPTIONS
+spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedHeaders=Authorization,Content-Type
+```
+
+> En la práctica el browser casi no golpea el gateway directo: el frontend usa un
+> proxy server-side de Next.js. CORS solo aplica a las redirecciones OAuth2 y a
+> clientes que llamen al gateway desde un navegador.
 
 ---
 
@@ -91,19 +111,22 @@ resilience4j.circuitbreaker.instances.ai-service.wait-duration-in-open-state=15s
 
 ---
 
-## Filtro JWT personalizado
+## Filtro JWT (`JwtAuthenticationFilter`)
 
-El Gateway incluye un filtro global que:
+Filtro global (`GlobalFilter`, order -100) que:
 1. Extrae el token del header `Authorization: Bearer {jwt}`
-2. Valida la firma usando la clave secreta compartida con auth-service
-3. Si es válido: agrega headers `X-User-Id` y `X-User-Email` al request downstream
-4. Si es inválido: devuelve `401 Unauthorized` inmediatamente
-5. Rutas exentas de JWT: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/oauth/**`
+2. Valida la firma con la clave secreta compartida con auth-service (`JWT_SECRET`)
+3. Si es válido: **setea** el header `X-User-Id` con el claim `userId` del token —
+   `headers.set()` pisa cualquier `X-User-Id` spoofeado por el cliente
+4. Si falta o es inválido: devuelve `401 Unauthorized` inmediatamente
+5. Paths públicos exentos: `/api/auth/login`, `/api/auth/register`, `/api/auth/validate`,
+   `/api/auth/verify-email`, `/oauth2/`, `/login/oauth2/`, `/actuator`
 
-```java
-// Lógica del filtro (pseudocódigo para implementar):
-// GatewayFilter → extract JWT → validate → mutate request con X-User-Id → chain.filter()
-```
+## Validación de secretos al arrancar
+
+`SecretsValidator` (perfil `!local`) corta el arranque si `JWT_SECRET` falta, tiene
+menos de 32 caracteres o conserva un valor de ejemplo/desarrollo.
+El valor de desarrollo vive en `application-local.properties` (perfil `local`).
 
 ---
 

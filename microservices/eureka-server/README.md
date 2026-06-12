@@ -38,7 +38,7 @@ eureka.client.fetch-registry=false
 eureka.server.wait-time-in-ms-when-sync-empty=0
 
 # Actuator
-management.endpoints.web.exposure.include=health,info
+management.endpoints.web.exposure.include=health,info,prometheus
 management.endpoint.health.show-details=always
 ```
 

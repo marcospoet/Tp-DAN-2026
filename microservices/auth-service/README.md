@@ -15,9 +15,11 @@ Es la única fuente de verdad sobre quién es el usuario y cómo quiere usar la 
 ## Stack
 
 - Spring Boot 3.x
-- Spring Security 6.x (con JWT)
-- Spring Data JPA + Hibernate
+- Spring Security 6.x (JWT + OAuth2 Client para Google/GitHub)
+- Spring Data JPA + Hibernate + Flyway
 - PostgreSQL (schema: `auth`)
+- Bean Validation (`@Valid` en registro y perfil)
+- Spring Mail (verificación de email — Mailhog en dev)
 - Spring Cloud Netflix Eureka Client
 - Spring Boot Actuator + Micrometer
 - Puerto: `8081`
@@ -67,10 +69,10 @@ server.port=8081
 spring.application.name=auth-service
 
 # PostgreSQL — schema: auth
+# SIN default para la password: en local usar el perfil "local"
 spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}
 spring.datasource.username=${AUTH_DB_USER:auth_user}
-spring.datasource.password=${AUTH_DB_PASSWORD:auth_pass}
-spring.datasource.driver-class-name=org.postgresql.Driver
+spring.datasource.password=${AUTH_DB_PASSWORD}
 
 # JPA — Flyway es quien crea y migra el schema, Hibernate solo valida
 spring.jpa.hibernate.ddl-auto=validate
@@ -83,17 +85,25 @@ spring.flyway.baseline-on-migrate=true
 
 # RabbitMQ
 spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
-spring.rabbitmq.port=5672
 spring.rabbitmq.username=${RABBITMQ_USER:guest}
 spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
 
 # Eureka
 eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
 
+# Secretos — SIN defaults: el servicio no arranca si faltan.
+# SecretsValidator (perfil != local) además rechaza valores cortos o de ejemplo.
+jwt.secret=${JWT_SECRET}
+app.encryption.secret=${APP_ENCRYPTION_SECRET}
+app.internal-api-secret=${INTERNAL_API_SECRET}
+
 # Actuator
 management.endpoints.web.exposure.include=health,info,prometheus
-management.endpoint.health.show-details=always
 ```
+
+> Los valores de desarrollo viven en `application-local.properties` (perfil `local`,
+> activado con `mvn spring-boot:run "-Dspring-boot.run.profiles=local"`). Docker/k8s
+> usan el perfil `docker` y exigen las env vars reales.
 
 ---
 
@@ -101,15 +111,16 @@ management.endpoint.health.show-details=always
 
 | Método | Path | Autenticación | Descripción |
 |--------|------|:---:|-------------|
-| `POST` | `/api/auth/register` | ❌ | Registro con email/password |
+| `POST` | `/api/auth/register` | ❌ | Registro — valida password: mín. 8 chars, mayúscula, minúscula y número |
 | `POST` | `/api/auth/login` | ❌ | Login, devuelve JWT |
-| `POST` | `/api/auth/oauth/google` | ❌ | Login con Google OAuth token |
-| `POST` | `/api/auth/oauth/github` | ❌ | Login con GitHub OAuth token |
-| `POST` | `/api/auth/forgot-password` | ❌ | Solicitar reset de contraseña |
-| `POST` | `/api/auth/reset-password` | ❌ | Confirmar nuevo password con token |
-| `GET` | `/api/auth/profile` | ✅ JWT | Obtener perfil del usuario |
-| `PUT` | `/api/auth/profile` | ✅ JWT | Actualizar perfil (nombre, budget, IA key, etc.) |
-| `DELETE` | `/api/auth/account` | ✅ JWT | Eliminar cuenta (publica `user.deleted`) |
+| `GET` | `/api/auth/validate` | ❌ | Validar token |
+| `GET` | `/api/auth/verify-email` | ❌ | Verificación de email (link del mail) |
+| `POST` | `/api/auth/resend-verification` | ❌ | Reenviar mail de verificación |
+| `GET/POST` | `/oauth2/**`, `/login/oauth2/**` | ❌ | Flujo OAuth2 con Google/GitHub (redirect) |
+| `GET` | `/api/auth/profile` | ✅ JWT | Obtener perfil (API keys enmascaradas) |
+| `PUT` | `/api/auth/profile` | ✅ JWT | Actualizar perfil — campos omitidos no se tocan; key vacía = borrar |
+| `POST` | `/api/auth/change-password` | ✅ JWT | Cambiar contraseña |
+| `DELETE` | `/api/auth/profile` | ✅ JWT | Eliminar cuenta (publica `user.deleted`) |
 | `GET` | `/internal/users/{userId}/api-keys` | 🔒 `X-Internal-Secret` | Devuelve las API keys del usuario **descifradas**, para uso exclusivo de ai-service |
 
 **Nota:** Los endpoints marcados con ✅ JWT leen el header `X-User-Id` inyectado por el Gateway.
@@ -119,7 +130,8 @@ No necesitan re-validar el JWT.
 `/internal/**` configurada) y solo es alcanzable container-to-container dentro de la
 red de Docker. Su seguridad no depende de Spring Security (está en `permitAll()`),
 sino de la validación del header `X-Internal-Secret` contra `app.internal-api-secret`
-dentro del propio controller.
+dentro del propio controller, con **comparación constant-time**
+(`MessageDigest.isEqual`) para no filtrar el secreto vía timing attack.
 
 ---
 

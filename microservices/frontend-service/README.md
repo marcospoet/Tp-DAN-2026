@@ -15,12 +15,12 @@ Registrá movimientos por texto, foto, audio o PDF y dejá que la IA los interpr
 
 | Aspecto | Implementación |
 |---|---|
-| Auth | JWT contra `auth-service` vía API Gateway |
+| Auth | JWT contra `auth-service` vía API Gateway + OAuth2 (Google/GitHub) |
 | Base de datos | `transaction-service` (PostgreSQL) vía API Gateway |
 | Storage de imágenes | MinIO vía `transaction-service` |
-| Llamadas de IA | `ai-service` vía API Gateway (keys server-side) |
+| Llamadas de IA | `ai-service` vía API Gateway — la API key la carga **cada usuario** en Ajustes y se guarda cifrada en `auth-service` |
 | Deploy | Docker multi-stage + Kubernetes |
-| Variables de entorno | `BACKEND_URL` (server-side only) |
+| Variables de entorno | `BACKEND_URL` (server-side) + `NEXT_PUBLIC_OAUTH_URL` (solo para el redirect OAuth) |
 | Offline queue | localStorage + sync via REST al `api-gateway` |
 | PDF de facturas | Soportado — se envía a `ai-service` para parseo |
 
@@ -37,12 +37,15 @@ Registrá movimientos por texto, foto, audio o PDF y dejá que la IA los interpr
 - **PDF de facturas** — adjuntá un PDF; la IA extrae monto total, proveedor y categoría automáticamente
 
 ### Pesito IA (asistente de chat)
+- **Dos modos** — toggle Asistente (detección de intents + registro rápido) / Asesor (agente conversacional con tools)
 - **Registrar movimientos** desde el chat — "gasté 3500 en almuerzo"
-- **Modificar y eliminar** — "al taxi de ayer cambiá el monto a 2800"; "borrá el super de ayer"
+- **Modificar y eliminar** — "al taxi de ayer cambiá el monto a 2800"; "borrá el super de ayer" (el borrado pide confirmación explícita)
 - **Marcar recurrentes** — "marcá el alquiler como recurrente"
 - **Consultar y analizar** — "¿cuánto gasté esta semana?", "¿en qué categoría gasto más?"
+- **Memoria entre sesiones** — el agente recuerda conversaciones pasadas (memoria semántica) y tu perfil financiero
 - **Contexto financiero completo** — últimos 60 movimientos, resumen anual/mensual, proyección, cotización USD activa
 - **Soporte de voz** — grabación en el chat con transcripción automática
+- **API key por usuario** — se carga en Ajustes → Cuenta y se guarda cifrada en el backend; al cambiar entre OpenAI y Gemini la app ofrece migrar los documentos indexados o pausarlos
 
 ### Gestión de transacciones
 - **Swipe en mobile** — deslizá derecha para editar, izquierda para eliminar
@@ -219,9 +222,11 @@ interface Transaction {
 
 | Variable | Dónde | Propósito |
 |---|---|---|
-| `BACKEND_URL` | Server-side (Docker env / `.env.local`) | URL base del API Gateway |
+| `BACKEND_URL` | Server-side (Docker env / `.env.local`) | URL base del API Gateway para el proxy |
+| `NEXT_PUBLIC_OAUTH_URL` | Browser | URL del gateway para el redirect de OAuth2 (navegación, no fetch) |
 
-No se usan variables `NEXT_PUBLIC_*`. La URL del backend nunca se expone al browser.
+Las llamadas de datos nunca exponen la URL del backend al browser: van por el proxy.
+La única excepción es el flujo OAuth2, que es una redirección de navegación al gateway.
 
 ---
 
@@ -240,7 +245,7 @@ BACKEND_URL=http://localhost:8080
 ```
 
 ```bash
-npm run dev   # http://localhost:3001
+npm run dev   # http://localhost:3000 (en Docker se publica como 3001)
 ```
 
 > **Requiere** que el API Gateway (`api-gateway`) esté corriendo en `localhost:8080`

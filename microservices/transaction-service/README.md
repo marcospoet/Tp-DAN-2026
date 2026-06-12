@@ -44,18 +44,10 @@ Ningún otro servicio puede leer ni escribir en las tablas `txn.transactions` o 
     <artifactId>resilience4j-spring-boot3</artifactId>
 </dependency>
 
-<!-- Para exportación CSV (Apache Commons CSV) -->
+<!-- Bean Validation — @Valid en los controllers + constraints en DTOs -->
 <dependency>
-    <groupId>org.apache.commons</groupId>
-    <artifactId>commons-csv</artifactId>
-    <version>1.10.0</version>
-</dependency>
-
-<!-- Para exportación PDF (OpenPDF o Flying Saucer) -->
-<dependency>
-    <groupId>com.github.librepdf</groupId>
-    <artifactId>openpdf</artifactId>
-    <version>1.3.30</version>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
 </dependency>
 
 <!-- MinIO SDK para comprobantes -->
@@ -65,6 +57,8 @@ Ningún otro servicio puede leer ni escribir en las tablas `txn.transactions` o 
     <version>8.5.7</version>
 </dependency>
 ```
+
+> La exportación CSV/PDF se genera en el **frontend** (client-side), no en este servicio.
 
 ---
 
@@ -76,10 +70,10 @@ spring.application.name=transaction-service
 
 # PostgreSQL — schema: txn
 # txn_user solo tiene acceso al schema txn, no al schema auth
+# SIN default para la password: en local usar el perfil "local"
 spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}
 spring.datasource.username=${TXN_DB_USER:txn_user}
-spring.datasource.password=${TXN_DB_PASSWORD:txn_pass}
-spring.datasource.driver-class-name=org.postgresql.Driver
+spring.datasource.password=${TXN_DB_PASSWORD}
 
 spring.jpa.hibernate.ddl-auto=validate
 spring.jpa.properties.hibernate.default_schema=txn
@@ -101,10 +95,10 @@ eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eurek
 
 # Actuator
 management.endpoints.web.exposure.include=health,info,prometheus
-management.endpoint.health.show-details=always
 ```
 
-> **TODO:** agregar configuración de MinIO, DolarAPI y Resilience4J cuando se implementen esas funcionalidades.
+> Los valores de desarrollo viven en `application-local.properties` (perfil `local`,
+> activado con `mvn spring-boot:run "-Dspring-boot.run.profiles=local"`).
 
 ---
 
@@ -112,26 +106,28 @@ management.endpoint.health.show-details=always
 
 | Método | Path | Descripción |
 |--------|------|-------------|
-| `GET` | `/api/transactions` | Listar transacciones (paginadas, con filtros) |
-| `POST` | `/api/transactions` | Crear transacción |
+| `GET` | `/api/transactions` | Listar transacciones (paginadas, filtro opcional `from`/`to`) |
+| `POST` | `/api/transactions` | Crear transacción (body validado con Bean Validation) |
 | `GET` | `/api/transactions/{id}` | Obtener transacción por ID |
-| `PUT` | `/api/transactions/{id}` | Actualizar transacción |
+| `PUT` | `/api/transactions/{id}` | Actualizar transacción (parcial: campos omitidos no se tocan) |
 | `DELETE` | `/api/transactions/{id}` | Eliminar transacción |
-| `GET` | `/api/transactions/summary` | Totales del período (para summary cards) |
-| `GET` | `/api/transactions/rates` | Cotizaciones actuales (proxy DolarAPI) |
+| `GET` | `/api/transactions/{id}/receipt` | Ver comprobante (stream desde MinIO) |
 | `POST` | `/api/transactions/{id}/receipt` | Subir comprobante (multipart) |
-| `GET` | `/api/transactions/{id}/receipt` | URL firmada del comprobante |
-| `GET` | `/api/transactions/export/csv` | Exportar CSV del período |
-| `GET` | `/api/transactions/export/pdf` | Exportar PDF del período |
+| `GET` | `/api/transactions/{id}/receipt/url` | URL presignada del comprobante |
+| `DELETE` | `/api/transactions/{id}/receipt` | Eliminar comprobante |
+| `GET` | `/api/rates` | Cotizaciones actuales (proxy DolarAPI con cache) |
+| `GET` | `/api/rates/{type}` | Cotización puntual (`blue`, `oficial`, `tarjeta`, `mep`) |
 
 **Parámetros de query para listado:**
-- `period`: `week` | `month` | `year` | `custom`
-- `from` / `to`: fechas para period=custom (ISO 8601)
-- `page` / `size`: paginación
-- `type`: `income` | `expense` (filtro opcional)
-- `search`: búsqueda por descripción/categoría
+- `from` / `to`: filtro por rango de fechas (ISO 8601, ambos opcionales)
+- `page` / `size` / `sort`: paginación de Spring Data (default: 20 por página, orden por fecha)
 
-**Todos los endpoints leen `X-User-Id` del header** (inyectado por el Gateway).
+**Todos los endpoints requieren `X-User-Id`** (inyectado por el Gateway desde el JWT).
+La pertenencia de la transacción al usuario se valida con el aspecto `@RequireOwnership`.
+
+**Validación de input** (`@Valid` + Bean Validation): descripción obligatoria (máx. 255),
+monto obligatorio y positivo, fecha obligatoria, `@Size` en el resto de los campos.
+Los errores devuelven `400` con `ProblemDetail`.
 
 ---
 
@@ -215,20 +211,9 @@ user.deleted → elimina todas las transacciones donde user_id = {userId}
   "date": "2025-04-15",
   "timestamp": "2025-04-15T10:30:00Z"
 }
-
-// budget.threshold.exceeded
-{
-  "userId": "uuid",
-  "monthlyBudget": 150000,
-  "currentExpenses": 135000,
-  "percentage": 90,
-  "timestamp": "2025-04-15T10:30:00Z"
-}
 ```
 
-**Nota:** `budget.threshold.exceeded` se verifica después de cada `POST /api/transactions`.
-Se necesita el `monthly_budget` del perfil del usuario: se obtiene llamando a auth-service
-via REST (GET `/api/auth/profile/{userId}`) o se envía en el JWT.
+Lo consume ai-service para invalidar caches dependientes de las transacciones del usuario.
 
 ---
 

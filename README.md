@@ -83,7 +83,7 @@ cp .env.example .env
 ```
 
 Editar `.env` y reemplazar todos los valores `cambiar_en_produccion`.
-Generar el JWT secret con:
+Generar `JWT_SECRET`, `APP_ENCRYPTION_SECRET` e `INTERNAL_API_SECRET` con:
 
 ```powershell
 # PowerShell
@@ -94,6 +94,11 @@ $bytes = New-Object byte[] 64; [System.Security.Cryptography.RandomNumberGenerat
 # Linux / Mac / WSL
 openssl rand -hex 64
 ```
+
+> **Fail-fast de secretos:** los servicios validan los secretos al arrancar (`SecretsValidator`).
+> Si un secreto falta, tiene menos de 32 caracteres o conserva un valor de ejemplo
+> (`cambiar...`, `reemplazar...`), el servicio **se niega a arrancar** con un mensaje claro.
+> Los valores de desarrollo viven solo en el perfil `local` de cada servicio.
 
 ### 3. Levantar todos los servicios
 
@@ -167,7 +172,7 @@ El repositorio incluye una colección [Bruno](https://www.usebruno.com/) lista p
 | Variable | Valor por defecto | Descripción |
 |---|---|---|
 | `userEmail` | `test@pesito.com` | Email para register/login |
-| `userPassword` | `password123` | Password para register/login |
+| `userPassword` | `Password123` | Password para register/login (mín. 8 caracteres, una mayúscula, una minúscula y un número) |
 | `token` | *(se setea automático)* | JWT devuelto por register/login |
 | `userId` | *(se setea automático)* | UUID del usuario autenticado |
 
@@ -179,12 +184,15 @@ El repositorio incluye una colección [Bruno](https://www.usebruno.com/) lista p
 
 | Método | Path | Auth | Descripción |
 |---|---|:---:|---|
-| `POST` | `/api/auth/register` | — | Registro con email/password |
+| `POST` | `/api/auth/register` | — | Registro con email/password (valida: mín. 8 chars, mayúscula, minúscula y número) |
 | `POST` | `/api/auth/login` | — | Login, devuelve JWT |
 | `GET` | `/api/auth/validate` | — | Validar token (usado por el Gateway) |
-| `GET` | `/api/auth/profile` | JWT | Perfil del usuario autenticado |
-| `PUT` | `/api/auth/profile` | JWT | Actualizar perfil |
-| `DELETE` | `/api/auth/profile` | JWT | Eliminar cuenta |
+| `GET` | `/api/auth/verify-email` | — | Verificación de email (link del mail) |
+| `POST` | `/api/auth/resend-verification` | — | Reenviar mail de verificación |
+| `GET` | `/api/auth/profile` | JWT | Perfil del usuario autenticado (API keys enmascaradas) |
+| `PUT` | `/api/auth/profile` | JWT | Actualizar perfil (nombre, presupuesto, proveedor de IA, API keys) |
+| `POST` | `/api/auth/change-password` | JWT | Cambiar contraseña |
+| `DELETE` | `/api/auth/profile` | JWT | Eliminar cuenta (publica `user.deleted`) |
 
 ### transaction-service (`/api/transactions`)
 
@@ -193,24 +201,29 @@ Todos los endpoints requieren `Authorization: Bearer <token>` y el header `X-Use
 | Método | Path | Descripción |
 |---|---|---|
 | `GET` | `/api/transactions` | Listar (paginado, filtro por fechas) |
-| `POST` | `/api/transactions` | Crear transacción |
+| `POST` | `/api/transactions` | Crear transacción (body validado con Bean Validation) |
 | `GET` | `/api/transactions/{id}` | Obtener por ID |
-| `PUT` | `/api/transactions/{id}` | Actualizar |
+| `PUT` | `/api/transactions/{id}` | Actualizar (parcial) |
 | `DELETE` | `/api/transactions/{id}` | Eliminar |
-| `POST` | `/api/transactions/{id}/receipt` | Subir imagen de comprobante (MinIO) |
-| `GET` | `/api/exchange-rates` | Cotizaciones ARS/USD actuales |
+| `GET/POST/DELETE` | `/api/transactions/{id}/receipt` | Ver / subir / borrar comprobante (MinIO) |
+| `GET` | `/api/transactions/{id}/receipt/url` | URL presignada del comprobante |
+| `GET` | `/api/rates` | Cotizaciones ARS/USD (proxy DolarAPI con cache) |
+| `GET` | `/api/rates/{type}` | Cotización puntual (`blue`, `oficial`, `tarjeta`, `mep`) |
 
 ### ai-service (`/api/ai`)
 
-Todos los endpoints leen `X-User-Id` del header (inyectado por el Gateway).
+Todos los endpoints **exigen** el header `X-User-Id` (lo inyecta el Gateway desde el JWT;
+los valores enviados por el cliente se descartan).
 
 | Método | Path | Descripción |
 |---|---|---|
 | `POST` | `/api/ai/parse` | Texto / imagen / audio / PDF → transacción(es) JSON |
-| `POST` | `/api/ai/chat` | Mensaje conversacional → respuesta del asistente Pesito |
-| `POST` | `/api/ai/detect-intent` | Detectar intención: `update`, `delete` o `recurring` |
+| `POST` | `/api/ai/chat` | Mensaje conversacional → agente con tools y memoria |
+| `POST` | `/api/ai/detect-intent` | Detectar intención: `update`, `delete`, `recurring` o `csv` |
 | `POST` | `/api/ai/csv-mapping` | Identificar columnas de un CSV bancario |
-| `POST` | `/api/ai/transcribe` | Transcribir audio (OpenAI Whisper / Gemini) |
+| `POST` | `/api/ai/transcribe` | Transcribir audio (OpenAI Whisper) |
+| `POST` | `/api/ai/embeddings/migrate` | Re-embeber documentos al cambiar de proveedor (202, corre en background) |
+| `POST` | `/api/ai/embeddings/pause` | Pausar la búsqueda semántica de documentos ("solo chatear") |
 
 ### Swagger UI
 
@@ -223,16 +236,18 @@ Cada microservicio Java expone su documentación interactiva:
 
 ## Proveedores de IA
 
-El ai-service soporta tres proveedores configurables vía variables de entorno en `.env`:
+Las API keys son **100% por usuario** — el servidor no tiene claves propias.
+Cada usuario carga su key (Claude, OpenAI o Gemini) en **Ajustes → Cuenta**:
 
-| Variable | Descripción |
-|---|---|
-| `AI_PROVIDER` | Proveedor por defecto: `claude`, `openai` o `gemini` |
-| `CLAUDE_API_KEY` | API key de Anthropic (claude-3-5-haiku / claude-3-5-sonnet para PDFs) |
-| `OPENAI_API_KEY` | API key de OpenAI (gpt-4o-mini con soporte de visión) |
-| `GEMINI_API_KEY` | API key de Google (gemini-2.0-flash) |
+1. La key viaja una sola vez al `auth-service`, que la guarda **cifrada con AES-256-GCM** en PostgreSQL.
+2. Cuando el usuario chatea, `ai-service` resuelve la key llamando al endpoint interno
+   `GET /internal/users/{userId}/api-keys` de auth-service (protegido por `INTERNAL_API_SECRET`)
+   y la cachea 60 segundos.
+3. El frontend nunca vuelve a ver la key: el perfil la devuelve **enmascarada** (`sk-p...****abcd`).
 
-El proveedor se puede cambiar desde la UI de Pesito en Ajustes sin reiniciar el servicio.
+El proveedor se cambia desde Ajustes sin reiniciar nada. Al cambiar entre OpenAI y Gemini
+(espacios vectoriales incompatibles para RAG), la UI ofrece **migrar los documentos**
+(re-embeber con el proveedor nuevo) o **pausarlos** ("solo chatear").
 
 ### Soporte de PDFs
 
@@ -246,12 +261,13 @@ Cuando el usuario adjunta una factura en PDF desde la Magic Bar:
 
 ## Base de datos
 
-PostgreSQL usa dos schemas separados con usuarios dedicados:
+PostgreSQL usa tres schemas separados con usuarios dedicados (cada usuario solo accede a su schema):
 
-| Schema | Usuario | Servicio propietario |
-|---|---|---|
-| `auth` | `auth_user` | auth-service |
-| `txn` | `txn_user` | transaction-service |
+| Schema | Usuario | Servicio propietario | Contenido |
+|---|---|---|---|
+| `auth` | `auth_user` | auth-service | Usuarios, perfiles, API keys cifradas |
+| `txn` | `txn_user` | transaction-service | Transacciones, comprobantes |
+| `ai` | `ai_db_user` | ai-service | Knowledge base RAG (pgvector, embeddings por proveedor) |
 
 Las migraciones las gestiona **Flyway** automáticamente al arrancar cada servicio.
 Los scripts están en `src/main/resources/db/migration/` de cada microservicio.
@@ -260,8 +276,9 @@ MongoDB lo usa exclusivamente el **ai-service**:
 
 | Colección | Contenido |
 |---|---|
-| `chat_sessions` | Sesiones de conversación por usuario |
-| `chat_messages` | Historial de mensajes del asistente Pesito |
+| `chat_sessions` | Sesiones de conversación por usuario (con historial embebido) |
+| `chat_memories` | Memoria semántica de largo plazo (mensajes embebidos, por proveedor) |
+| `agent_profiles` | Perfil financiero del usuario generado por LLM (se regenera cada 30 días) |
 
 ### Resetear la base de datos
 
@@ -315,6 +332,25 @@ Credenciales: las definidas en `.env` (`MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`)
 
 Cada microservicio expone métricas en `/actuator/prometheus`.
 
+**Observabilidad del agente IA** (opcional): configurando `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`
+en `.env`, cada conversación genera traces con spans por llamada al LLM y por tool en
+[Langfuse](https://cloud.langfuse.com). Sin claves, el tracing es un no-op. El logging SLF4J
+de llamadas y tokens funciona siempre; con `AI_LLM_LOG_LEVEL=DEBUG` se loguean los prompts completos.
+
+---
+
+## Seguridad
+
+Resumen de las medidas implementadas:
+
+- **JWT** validado en el API Gateway; `X-User-Id` se inyecta desde el claim del token y pisa cualquier valor del cliente.
+- **Secretos sin defaults** en la configuración base + `SecretsValidator` fail-fast (rechaza secretos cortos o de ejemplo). Valores dev solo en el perfil `local`.
+- **API keys de usuario cifradas** (AES-256-GCM) en reposo; el endpoint interno que las descifra usa comparación constant-time y un secreto compartido.
+- **Bean Validation** (`@Valid`) en todos los DTOs de entrada de los 3 servicios.
+- **CORS** con whitelist explícita de headers y origins configurables (`CORS_ALLOWED_ORIGINS`).
+- **Passwords** con BCrypt y política de complejidad en el registro.
+- Schemas de Postgres separados con usuarios dedicados por servicio.
+
 ---
 
 ## Desarrollo local (sin Docker)
@@ -332,7 +368,11 @@ cd microservices
 mvn -pl auth-service spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-El perfil `local` usa las credenciales definidas en `application-local.properties`.
+El perfil `local` es **obligatorio** para correr sin Docker: la configuración base no
+tiene defaults para secretos ni passwords, así que sin el perfil el servicio
+falla con `Could not resolve placeholder`. Los cuatro servicios con secretos
+(auth, gateway, transaction, ai) tienen su `application-local.properties` commiteado
+con credenciales de desarrollo.
 
 Para el frontend:
 
@@ -376,7 +416,10 @@ tp-dan-2026/
 │   ├── environments/
 │   │   └── local.bru
 │   ├── auth-service/
-│   └── transaction-service/
+│   ├── transaction-service/
+│   └── receipts/
+├── docs/
+│   └── test-cases.md            ← Casos de prueba del agente IA (coloquio)
 ├── docker-compose.yml
 ├── .env.example                 ← Plantilla de variables de entorno
 └── README.md
@@ -489,10 +532,12 @@ Editar `k8s/01-secrets.yaml` y reemplazar **todos** los valores `CHANGE_ME`:
 | `RABBITMQ_PASSWORD` | Contraseña del usuario `admin` de RabbitMQ |
 | `MINIO_SECRET_KEY` | Secret key de MinIO (mínimo 8 caracteres) |
 | `JWT_SECRET` | Secret para firmar JWTs (mínimo 64 caracteres hex) |
+| `APP_ENCRYPTION_SECRET` | Cifrado AES-256-GCM de las API keys de usuario (mínimo 32 caracteres) |
+| `INTERNAL_API_SECRET` | Secreto compartido auth-service ↔ ai-service (mínimo 32 caracteres) |
+| `AI_DB_PASSWORD` | Contraseña del usuario `ai_db_user` (RAG/pgvector) |
 | `GRAFANA_PASSWORD` | Contraseña del usuario `admin` de Grafana |
-| `CLAUDE_API_KEY` | API key de Anthropic (opcional si usás otro proveedor) |
-| `OPENAI_API_KEY` | API key de OpenAI (opcional) |
-| `GEMINI_API_KEY` | API key de Google (opcional) |
+
+> Las API keys de IA (Claude/OpenAI/Gemini) **no van en secrets**: cada usuario carga la suya desde la app.
 
 ---
 
@@ -719,11 +764,26 @@ docker compose down -v && docker compose up --build
 
 ---
 
+**La IA dice "No configuraste tu clave de API"**
+
+- La key se carga **por usuario** en la app: Ajustes → Cuenta → seleccionar proveedor → pegar key → Guardar
+- La key debe empezar con el prefijo correcto (`sk-ant-` Claude, `sk-` OpenAI, `AIza` Gemini)
+- ai-service cachea las keys 60 segundos: tras guardarla, esperar un minuto antes de chatear
+
+---
+
 **La IA no responde / timeout**
 
-- Verificar que la API key esté configurada correctamente en `.env`
 - Revisar logs del ai-service: `docker compose logs ai-service -f`
 - El parse tiene un timeout de 30 segundos; si el proveedor está sobrecargado, reintentar
+
+---
+
+**Un servicio no arranca con `IllegalStateException: ... no esta configurado` o `Could not resolve placeholder`**
+
+Es el fail-fast de secretos. Falta una variable en `.env` (docker) o el secreto
+tiene un valor de ejemplo/corto. Generar uno real con `openssl rand -hex 32` y completar `.env`.
+Para correr sin Docker, usar el perfil `local`.
 
 ---
 

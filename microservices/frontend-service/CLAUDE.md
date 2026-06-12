@@ -92,7 +92,7 @@ Transaction {
 
 ### AI Provider System
 
-AI calls (`lib/ai.ts`) go through the proxy to `ai-service` via the API Gateway. The AI provider is configured server-side in `ai-service` via `AI_PROVIDER`, `CLAUDE_API_KEY`, etc. — no API keys are stored in the frontend.
+AI calls (`lib/ai.ts`) go through the proxy to `ai-service` via the API Gateway. API keys are **per-user**: each user saves their key (Claude/OpenAI/Gemini) in Settings → Account; it is stored encrypted in `auth-service` and resolved internally by `ai-service`. The frontend never sends or stores raw API keys — the profile returns them masked.
 
 ### Health Check
 
@@ -113,7 +113,7 @@ Used by Docker healthcheck and Kubernetes liveness probes.
 
 ### Key Config Notes
 
-- `next.config.mjs` has `typescript: { ignoreBuildErrors: true }` — TypeScript errors do not fail the build
+- TypeScript errors **fail the build** (`ignoreBuildErrors` was removed) — run `npm run build` to type-check
 - `next.config.mjs` has `output: "standalone"` — required for the Docker multi-stage build
 - Path alias `@/*` maps to the project root (configured in `tsconfig.json`)
 - The UI is in **Spanish** (Argentine Spanish, ARS currency context)

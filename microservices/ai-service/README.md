@@ -1,29 +1,34 @@
 # ai-service
-## Procesamiento de IA, Chat Conversacional y Analytics
+## Procesamiento de IA, Agente Conversacional, RAG y Memoria
 
 ---
 
 ## Responsabilidad
 
-Contexto de dominio: **Inteligencia Artificial y Analytics**
+Contexto de dominio: **Inteligencia Artificial**
 
 Centraliza toda la interacción con modelos de lenguaje (Claude, OpenAI, Gemini).
-Gestiona el historial de conversaciones en MongoDB y computa las métricas de analytics.
-No persiste transacciones directamente: devuelve el resultado parseado al cliente.
+Implementa un **agente con tool calling** sobre los datos del usuario, una knowledge
+base **RAG con pgvector** (embeddings por proveedor), **memoria semántica de largo
+plazo** en MongoDB y un **perfil financiero** generado por LLM que persiste entre sesiones.
+
+Las API keys de los proveedores son **siempre por usuario**: las resuelve llamando al
+endpoint interno de auth-service (nunca hay claves server-side ni viajan desde el frontend).
 
 ---
 
 ## Stack
 
 - Spring Boot 3.x
-- Spring Data MongoDB
-- MongoDB (colecciones propias: chat_sessions, analytics_cache)
-- PostgreSQL (schema `ai`, vía Spring Data JDBC + Flyway) — exclusivo para RAG/pgvector
+- Spring Data MongoDB (colecciones: `chat_sessions`, `chat_memories`, `agent_profiles`)
+- PostgreSQL (schema `ai`, vía Spring JDBC + Flyway) — exclusivo para RAG/pgvector
 - Spring Cloud Netflix Eureka Client
 - Spring Boot Actuator + Micrometer
 - Spring AMQP (RabbitMQ)
-- WebClient (para llamadas a APIs externas: Anthropic, OpenAI, Google)
-- Apache PDFBox (extracción de texto de PDFs para la knowledge base RAG)
+- WebClient (llamadas a Anthropic, OpenAI, Google y Langfuse)
+- Apache PDFBox (render de PDFs a imagen para visión + extracción de texto para RAG)
+- Caffeine (cache de API keys de usuario, TTL 60s)
+- Bean Validation (`@Valid` en todos los DTOs de entrada)
 - Puerto: `8083`
 
 ---
@@ -42,11 +47,15 @@ No persiste transacciones directamente: devuelve el resultado parseado al client
 <!-- WebClient para llamadas a APIs de IA -->
 <dependency>spring-boot-starter-webflux</dependency>
 
-<!-- Para manejo de imágenes (compresión, base64) -->
+<!-- Bean Validation — @Valid en los controllers + constraints en DTOs -->
 <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-validation</artifactId>
 </dependency>
+
+<!-- Cache Caffeine — API keys de usuario (TTL 60s) -->
+<dependency>spring-boot-starter-cache</dependency>
+<dependency>com.github.ben-manes.caffeine:caffeine</dependency>
 
 <!-- PDF rendering / extracción de texto (vision + RAG) -->
 <dependency>
@@ -70,32 +79,43 @@ No persiste transacciones directamente: devuelve el resultado parseado al client
 server.port=8083
 spring.application.name=ai-service
 
-# MongoDB — única base de datos de este servicio (sin acceso a PostgreSQL)
-# Colecciones: chat_sessions, chat_messages, analytics_cache
-spring.data.mongodb.uri=mongodb://${MONGO_USER:ai_user}:${MONGO_PASSWORD:ai_pass}@${MONGO_HOST:localhost}:27017/ai_db?authSource=admin
+# MongoDB — chat, memoria de largo plazo y perfiles del agente
+# SIN default para la password: en local usar el perfil "local"
+spring.data.mongodb.uri=mongodb://${MONGO_USER:ai_user}:${MONGO_PASSWORD}@${MONGO_HOST:localhost}:27017/ai_db?authSource=ai_db
 
-# RabbitMQ
-# Consume: transaction.created (invalida cache de analytics)
+# RabbitMQ — consume transaction.created
 spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
-spring.rabbitmq.port=5672
 spring.rabbitmq.username=${RABBITMQ_USER:guest}
 spring.rabbitmq.password=${RABBITMQ_PASSWORD:guest}
 
 # Eureka
 eureka.client.service-url.defaultZone=http://${EUREKA_HOST:localhost}:8761/eureka
 
+# Tool calling sobre transaction-service y resolución interna de API keys
+ai.transaction-service-base-url=http://${TRANSACTION_HOST:localhost}:8082
+ai.auth-service-base-url=http://${AUTH_HOST:localhost}:8081
+# SIN default: si falta, el servicio no arranca
+ai.internal-api-secret=${INTERNAL_API_SECRET}
+
+# Observabilidad del agente — Langfuse (opcional, no-op sin claves)
+ai.langfuse-public-key=${LANGFUSE_PUBLIC_KEY:}
+ai.langfuse-secret-key=${LANGFUSE_SECRET_KEY:}
+
+# Con DEBUG se loguean prompts/respuestas COMPLETOS (datos sensibles — solo demo/debug)
+logging.level.com.pesito.ai.service.AiProviderService=${AI_LLM_LOG_LEVEL:INFO}
+
 # RAG — pgvector (PostgreSQL), schema "ai"
-# Knowledge base estática (Markdown/PDF) indexada bajo demanda
 spring.datasource.url=jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/${POSTGRES_DB:pesito}?currentSchema=ai,public
 spring.datasource.username=${AI_DB_USER:ai_db_user}
-spring.datasource.password=${AI_DB_PASSWORD:ai_pass}
+spring.datasource.password=${AI_DB_PASSWORD}
 spring.flyway.schemas=ai
-spring.flyway.default-schema=ai
 
 # Actuator
 management.endpoints.web.exposure.include=health,info,prometheus
-management.endpoint.health.show-details=always
 ```
+
+> Los valores de desarrollo (passwords `admin`, secreto interno dev) viven en
+> `application-local.properties`, activado con `mvn spring-boot:run "-Dspring-boot.run.profiles=local"`.
 
 ---
 
@@ -103,88 +123,72 @@ management.endpoint.health.show-details=always
 
 | Método | Path | Descripción |
 |--------|------|-------------|
-| `POST` | `/api/ai/parse` | Parsear texto/imagen/audio → transacción(es) |
-| `POST` | `/api/ai/chat` | Mensaje conversacional → respuesta del asistente |
-| `GET` | `/api/ai/chat/history` | Historial de mensajes del usuario |
-| `DELETE` | `/api/ai/chat/history` | Limpiar historial |
-| `GET` | `/api/ai/analytics/summary` | Resumen financiero del período |
-| `GET` | `/api/ai/analytics/trends` | Datos para gráfico de tendencias (12 meses) |
-| `GET` | `/api/ai/analytics/categories` | Breakdown por categoría (para PieChart) |
-| `GET` | `/api/ai/analytics/heatmap` | Datos para heatmap de gastos diarios |
-| `POST` | `/api/ai/detect/update` | Detectar intención de modificar transacción |
-| `POST` | `/api/ai/detect/delete` | Detectar intención de eliminar transacción |
-| `POST` | `/api/ai/detect/recurring` | Detectar intención de marcar como recurrente |
+| `POST` | `/api/ai/parse` | Parsear texto/imagen/PDF → transacción(es) JSON |
+| `POST` | `/api/ai/chat` | Mensaje conversacional → agente con tools y memoria |
+| `POST` | `/api/ai/detect-intent` | Detectar intención: `update`, `delete`, `recurring` o `csv` |
+| `POST` | `/api/ai/csv-mapping` | Identificar columnas de un CSV bancario |
+| `POST` | `/api/ai/transcribe` | Transcribir audio (OpenAI Whisper) |
+| `POST` | `/api/ai/embeddings/migrate` | Re-embeber KB + memorias con el proveedor nuevo (202, background) |
+| `POST` | `/api/ai/embeddings/pause` | Pausar la búsqueda semántica de documentos ("solo chatear") |
 
-**Todos los endpoints leen `X-User-Id` del header** (inyectado por el Gateway).
-
----
-
-## Flujo de Parseo (POST /api/ai/parse)
-
-```
-Cliente envía: { text: "café 800", attachments: [], apiKey: "sk-ant-...", provider: "claude" }
-      ↓
-ai-service valida formato de la API key (prefijo: sk-ant-, sk-, AIza)
-      ↓
-Construye el prompt con instrucciones + validaciones de injection
-      ↓
-Llama a la API del proveedor (con timeout de 30s)
-      ↓
-Recibe JSON: { transactions: [{ description, amount, type, category, icon, daysAgo, currency }] }
-      ↓
-Devuelve al cliente: la lista de transacciones parseadas (sin persistir)
-      ↓
-El cliente llama a transaction-service para persistir cada una
-```
-
-**Importante:** ai-service NO llama a transaction-service directamente para crear la transacción.
-El cliente (frontend) recibe el objeto parseado y decide si lo persiste. Esto evita acoplamiento
-entre servicios y permite que el usuario revise antes de guardar.
+**Todos los endpoints exigen el header `X-User-Id`** (lo inyecta el Gateway desde el
+JWT y pisa cualquier valor del cliente; el `userId` del body se ignora siempre).
+Los DTOs de entrada se validan con Bean Validation (`@Size` en mensajes y adjuntos,
+límite de 100 KB en `financialContext`); los errores devuelven 400 con `{"error": "..."}`.
 
 ---
 
-## Flujo de Analytics (GET /api/ai/analytics/*)
+## Resolución de API keys por usuario
 
-El ai-service necesita los datos de transacciones para calcular analytics.
-Hay dos estrategias posibles (elegir una):
-
-### Opción A: Llamada REST a transaction-service (recomendado para el TP)
 ```
-GET /api/ai/analytics/summary
+POST /api/ai/chat (X-User-Id: <uuid>)
       ↓
-ai-service llama internamente a: GET http://transaction-service/api/transactions/summary
+UserApiKeysClient → GET http://auth-service:8081/internal/users/{userId}/api-keys
+                    (header X-Internal-Secret = INTERNAL_API_SECRET)
       ↓
-transaction-service devuelve los datos agregados
+auth-service descifra las keys (AES-256-GCM) y las devuelve
       ↓
-ai-service aplica lógica de analytics (proyecciones, comparativas)
-      ↓
-Guarda resultado en analytics_cache (MongoDB) con TTL
-      ↓
-Devuelve al cliente
+ai-service cachea el resultado 60s (Caffeine) y usa la key del proveedor activo
 ```
 
-### Opción B: Recibir datos del evento (más desacoplado, más complejo)
-- Consumir `transaction.created` events y mantener un agregado en MongoDB
-- Más complejo pero evita llamadas síncronas entre servicios internos
-
-**Para el TP se recomienda Opción A** por simplicidad y claridad conceptual.
+Si el usuario no configuró key para el proveedor elegido, el endpoint responde
+`400 {"error": "No configuraste tu clave de API para <provider>. Andá a Ajustes → Cuenta."}`.
 
 ---
 
-## Contexto financiero para el chat
+## Agente conversacional (POST /api/ai/chat)
 
-Cuando el usuario envía un mensaje al chat, ai-service construye un contexto que incluye:
+El chat es un **agente con tool calling**: el LLM decide qué tools invocar en un loop
+hasta producir la respuesta final. Tools registradas (`ToolRegistry`):
 
-```
-- Cotización USD activa: 1 USD = {usdRate} ARS
-- Últimas 60 transacciones (obtenidas de transaction-service)
-- Resumen mensual: ingresos, gastos, neto, proyección
-- Presupuesto mensual y saldo restante (obtenido de auth-service)
-- Promedio diario de gastos
-- Top 3 categorías del mes
-```
+| Tool | Qué hace |
+|---|---|
+| `get_transactions` | Lista transacciones del usuario (devuelve ids para update/delete) |
+| `get_monthly_summary` | Resumen del mes (ingresos, gastos, por categoría) |
+| `get_account_balances` | Balance por cuenta / medio de pago |
+| `get_exchange_rate` | Cotización del dólar vía transaction-service (DolarAPI) |
+| `create_transaction` | Crea una transacción |
+| `update_transaction` | Modifica una transacción existente |
+| `delete_transaction` | Elimina — **exige `confirmed=true`**: el chequeo está en código, no solo en el prompt |
+| `search_financial_knowledge` | Búsqueda semántica en la knowledge base RAG |
+| `search_conversation_history` | Búsqueda semántica en la memoria de largo plazo |
 
-Este contexto se envía al LLM como system prompt, junto con el historial de la conversación.
+El system prompt incluye el contexto financiero enviado por el frontend, el
+**perfil histórico** del usuario (`agent_profiles`) y reglas anti prompt-injection.
+El frontend ofrece dos modos: **Asistente** (detección de intents + registro rápido)
+y **Asesor** (directo al agente conversacional).
+
+---
+
+## Memoria semántica de largo plazo
+
+Cada mensaje relevante del chat (≥25 caracteres, no trivial) se embebe con el proveedor
+activo y se guarda en `chat_memories` (máx. 1000 por usuario, guardado asíncrono best-effort).
+La tool `search_conversation_history` recupera los top-5 por similitud de coseno
+(calculada en Java, solo entre vectores del mismo proveedor).
+
+El **perfil financiero** (`agent_profiles`) lo genera el LLM resumiendo los datos del
+usuario; se regenera cada 30 días y se inyecta al system prompt en cada sesión nueva.
 
 ---
 
@@ -211,34 +215,39 @@ No hay indexado al *startup*. Cada vez que el agente invoca
 
 1. Lee los archivos de `knowledge-base/` (`KnowledgeBaseLoader`).
 2. Calcula el hash MD5 de cada archivo y lo compara contra
-   `ai.knowledge_sources.content_hash`.
+   `ai.knowledge_sources.content_hash` (por proveedor).
 3. Si cambió (o es nuevo): borra los chunks anteriores, lo divide en chunks
    de ~500 palabras con solapamiento de ~50 (`TextChunker`), genera los
-   embeddings (`EmbeddingService`, OpenAI `text-embedding-3-small`,
-   1536 dims) y los inserta en `ai.knowledge_chunks` (`KnowledgeChunkRepository`,
-   vía `com.pgvector.PGvector`).
+   embeddings y los inserta en `ai.knowledge_chunks` tagueados con el proveedor.
 4. Si no cambió: no hace nada.
 
 Luego embebe la query y busca los 5 chunks más similares por cosine
-similarity (`embedding <=> query_vector`).
+similarity (`embedding <=> query_vector`), filtrando por proveedor.
 
-### API key para embeddings
+### Embeddings por proveedor (patrón Strategy)
 
-RAG necesita una API key de **OpenAI** para generar embeddings,
-independientemente del proveedor de LLM elegido para el chat:
+Los embeddings se generan **con la API key del propio usuario** según su proveedor activo
+(`EmbeddingStrategyResolver`):
 
-- `provider=openai` con `apiKey` del usuario → se usa esa key.
-- Cualquier otro caso (Claude, Gemini, o sin key de OpenAI) → se usa
-  `OPENAI_API_KEY` configurada server-side como fallback.
-- Si ninguna está disponible, la tool devuelve
-  `{"error": "RAG requiere una API key de OpenAI..."}` y el LLM se lo informa
-  al usuario en vez de inventar una respuesta.
+| Proveedor | Modelo de embeddings | Dimensiones |
+|---|---|---|
+| OpenAI | `text-embedding-3-small` | 1536 |
+| Gemini | `gemini-embedding-001` | 1536 |
+| Claude | *(no soporta embeddings)* → degrada a búsqueda por keywords, sin tokens |
+
+Los vectores de OpenAI y Gemini son **incompatibles entre sí** — nunca se comparan
+vectores de proveedores distintos. Al cambiar entre OpenAI y Gemini, el frontend ofrece:
+
+- `POST /api/ai/embeddings/migrate` — re-indexa la KB y re-embebe memorias/perfil con el
+  proveedor nuevo (202, corre en background, consume tokens de la cuenta nueva).
+- `POST /api/ai/embeddings/pause` — flag `documentsPaused`: el chat sigue funcionando
+  pero sin búsqueda semántica de documentos (cero tokens).
 
 ### Esquema (Flyway, schema `ai`)
 
 ```sql
-ai.knowledge_sources (source PK, content_hash, indexed_at)
-ai.knowledge_chunks  (id, source, chunk_index, content, embedding vector(1536))
+ai.knowledge_sources (source, provider, content_hash, indexed_at)   -- V3: columna provider
+ai.knowledge_chunks  (id, source, provider, chunk_index, content, embedding vector(1536))
 ```
 
 El usuario `ai_db_user` solo tiene permisos sobre el schema `ai` (no accede a
@@ -250,48 +259,44 @@ custom de `infrastructure/postgres/Dockerfile` (pgvector v0.7.4 sobre
 
 ## Protección contra Prompt Injection
 
-La lógica de `lib/ai.ts` del proyecto original incluye 89+ patrones de detección de inyección.
-Al migrar a ai-service, se debe implementar `sanitizeUserInput()` antes de cada llamada al LLM:
-- Strips HTML tags
-- Detecta instrucciones del sistema embebidas en texto del usuario
-- Rechaza inputs con patrones sospechosos (inglés + español + portugués)
+`PromptService.sanitizeUserInput()` corre antes de cada llamada al LLM:
+- Strip de HTML tags
+- Detección de instrucciones del sistema embebidas en el texto del usuario (regex multi-idioma)
+- El system prompt refuerza no revelar instrucciones ni ejecutar pedidos meta
+
+> La sanitización por regex es una primera línea de defensa, evadible con unicode/leetspeak.
+> La defensa real es que las tools destructivas
+> exigen confirmación validada en código.
 
 ---
 
-## Gestión del Historial de Chat (MongoDB)
+## Persistencia en MongoDB
 
 ```
-chat_sessions collection:
-  - Creada cuando el usuario inicia una conversación
-  - sessionId es único por userId + fecha de inicio
-
-chat_messages collection:
-  - Cada mensaje (user o assistant) es un documento
-  - Índice por (sessionId, createdAt) para recuperación eficiente
-  - Los últimos 50 mensajes se envían al LLM en cada request (rolling window)
+chat_sessions   → sesión por usuario con historial embebido (rolling window de 40 turnos);
+                  un scheduler limpia sesiones inactivas
+chat_memories   → memoria semántica de largo plazo (embedding + provider + texto)
+agent_profiles  → perfil financiero generado por LLM (summary, topCategory,
+                  documentsPaused, regenerado cada 30 días)
 ```
+
+---
+
+## Observabilidad del agente
+
+- **Logs SLF4J**: cada llamada al LLM (`[AGENT]`), cada tool (`[TOOL] name=...`) y los
+  tokens por turno y totales (`[USAGE]`). Con `AI_LLM_LOG_LEVEL=DEBUG` se loguean los
+  prompts y respuestas completos (datos sensibles — solo demo/debug).
+- **Langfuse** (opcional): con `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` configuradas,
+  cada conversación genera un trace con spans por LLM call y tool, incluyendo usage.
+  Sin claves es un no-op.
 
 ---
 
 ## Eventos consumidos de RabbitMQ
 
 ```
-transaction.created → invalida el analytics_cache del userId afectado
-                      (elimina o marca como inválido el documento en MongoDB)
-
-budget.threshold.exceeded → puede agregar un mensaje proactivo en el chat
-                            (próxima implementación)
-```
-
----
-
-## Invalidación de Cache de Analytics
-
-Cuando llega el evento `transaction.created`:
-```java
-// Pseudocódigo:
-analyticsCache.deleteByUserId(userId);
-// El próximo GET /api/ai/analytics/* reconstruirá el cache
+transaction.created → invalida caches dependientes de las transacciones del usuario
 ```
 
 ---
