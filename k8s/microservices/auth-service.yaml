@@ -102,6 +102,26 @@ spec:
               value: "https://api.pesito.dev"
             - name: APP_FRONTEND_URL
               value: "https://pesito.dev"
+            # Mail — Resend via SMTP (verificación de email y reset de contraseña)
+            # Si falta la API key el registro no falla: el mail se descarta (catch en AuthServiceImpl)
+            - name: MAIL_HOST
+              value: smtp.resend.com
+            - name: MAIL_PORT
+              value: "587"
+            - name: MAIL_USERNAME
+              value: resend
+            - name: MAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: RESEND_API_KEY
+                  optional: true
+            - name: MAIL_FROM
+              value: noreply@pesito.dev
+            - name: MAIL_SMTP_AUTH
+              value: "true"
+            - name: MAIL_SMTP_TLS
+              value: "true"
           readinessProbe:
             httpGet:
               path: /actuator/health
