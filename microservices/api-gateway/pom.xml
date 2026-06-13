@@ -41,6 +41,18 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- Rate limiting per-usuario/IP (token bucket en memoria). Sin Redis:
+             adecuado para replicas:1; el store usa Caffeine con expiración. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.7.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- JJWT — validar tokens JWT y extraer userId para X-User-Id header -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
