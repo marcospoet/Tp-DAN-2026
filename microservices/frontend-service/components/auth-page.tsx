@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Wallet,
@@ -60,6 +60,7 @@ export function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -68,6 +69,16 @@ export function AuthPage() {
     setError(null)
     setSuccessMsg(null)
   }
+
+  // Cuenta regresiva del cooldown de reenvío (1 tick por segundo)
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000)
+    return () => clearTimeout(id)
+  }, [resendCooldown])
+
+  const formatCooldown = (s: number) =>
+    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
 
   const switchMode = (next: Mode) => {
     clearMessages()
@@ -131,6 +142,7 @@ export function AuthPage() {
         setToken(res.token)
         toast.success("¡Cuenta creada!", { description: `Bienvenido${name.trim() ? `, ${name.trim()}` : ""}` })
         // No recargamos: pasamos a la pantalla de verificación con la sesión ya activa
+        setResendCooldown(120)
         setMode("verify")
       }
     } catch (err: unknown) {
@@ -188,6 +200,7 @@ export function AuthPage() {
     try {
       await apiRequest("/api/auth/resend-verification", { method: "POST" })
       setCode("")
+      setResendCooldown(120)
       setSuccessMsg("Te enviamos un código nuevo. Revisá tu casilla.")
     } catch {
       setError("No se pudo reenviar el código. Intentá de nuevo en unos minutos.")
@@ -353,11 +366,15 @@ export function AuthPage() {
             <div className="flex items-center justify-between mt-1">
               <button
                 type="button"
-                className="text-sm text-primary hover:underline font-medium cursor-pointer disabled:opacity-50"
+                className="text-sm text-primary hover:underline font-medium cursor-pointer disabled:opacity-50 disabled:no-underline disabled:cursor-default"
                 onClick={handleResend}
-                disabled={resending || loading}
+                disabled={resending || loading || resendCooldown > 0}
               >
-                {resending ? "Enviando..." : "Reenviar código"}
+                {resending
+                  ? "Enviando..."
+                  : resendCooldown > 0
+                  ? `Reenviar en ${formatCooldown(resendCooldown)}`
+                  : "Reenviar código"}
               </button>
               <button
                 type="button"
