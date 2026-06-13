@@ -146,6 +146,93 @@ function TiltCard({ children, className, maxTilt = 7 }: { children: React.ReactN
   )
 }
 
+// ── GyroTilt ───────────────────────────────────────────────────────────────────
+// Mobile-only: tilts an element using the device gyroscope (deviceorientation)
+// and sweeps a glass "reflection" highlight across it in the same direction.
+// Requires a user gesture on iOS 13+ to grant motion-sensor permission.
+function useGyroTilt(enabled: boolean) {
+  const rx = useMotionValue(0)
+  const ry = useMotionValue(0)
+  const rxs = useSpring(rx, { stiffness: 40, damping: 18 })
+  const rys = useSpring(ry, { stiffness: 40, damping: 18 })
+  const glareX = useMotionValue(50)
+  const glareY = useMotionValue(50)
+  const glareXs = useSpring(glareX, { stiffness: 40, damping: 18 })
+  const glareYs = useSpring(glareY, { stiffness: 40, damping: 18 })
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      const beta = e.beta ?? 90   // front-back tilt; ~90 when phone held upright
+      const gamma = e.gamma ?? 0  // left-right tilt; ~0 when level
+
+      const tiltX = Math.max(-10, Math.min(10, (beta - 90) * 0.3))
+      const tiltY = Math.max(-10, Math.min(10, gamma * 0.6))
+
+      rx.set(-tiltX)
+      ry.set(tiltY)
+      glareX.set(50 + tiltY * 2.5)
+      glareY.set(50 + tiltX * 2.5)
+    }
+
+    let listening = false
+    const start = () => {
+      if (listening) return
+      listening = true
+      window.addEventListener("deviceorientation", handleOrientation)
+    }
+
+    type DeviceOrientationEventStatic = typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<"granted" | "denied">
+    }
+    const DOE = DeviceOrientationEvent as DeviceOrientationEventStatic
+
+    if (typeof DOE.requestPermission === "function") {
+      const onTouch = () => {
+        DOE.requestPermission?.().then(res => { if (res === "granted") start() }).catch(() => {})
+      }
+      document.addEventListener("touchend", onTouch, { once: true })
+      return () => {
+        document.removeEventListener("touchend", onTouch)
+        if (listening) window.removeEventListener("deviceorientation", handleOrientation)
+      }
+    }
+
+    start()
+    return () => window.removeEventListener("deviceorientation", handleOrientation)
+  }, [enabled, rx, ry, glareX, glareY])
+
+  return { rotateX: rxs, rotateY: rys, glareX: glareXs, glareY: glareYs }
+}
+
+function GyroTilt({ children, className }: { children: React.ReactNode; className?: string }) {
+  const tier = useContext(PerfContext)
+  const { rotateX, rotateY, glareX, glareY } = useGyroTilt(tier !== "off")
+  const glareBg = useMotionTemplate`radial-gradient(circle at ${glareX}% ${glareY}%, oklch(1 0 0 / 0.35), transparent 55%)`
+
+  if (tier === "off") return <div className={className}>{children}</div>
+
+  return (
+    <div style={{ perspective: 800 }} className={className}>
+      <motion.div className="relative" style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}>
+        {children}
+        {/* Glass reflection — follows the gyroscope tilt */}
+        <motion.div
+          className="pointer-events-none absolute inset-0 rounded-[2.6rem] mix-blend-overlay"
+          style={{ background: glareBg }}
+        />
+      </motion.div>
+    </div>
+  )
+}
+
+// Desktop: mouse-driven 3D tilt (TiltCard). Mobile: gyroscope-driven tilt + reflection (GyroTilt).
+function PhoneTiltWrapper({ tier, children }: { tier: PerfTier; children: React.ReactNode }) {
+  if (tier === "full") return <TiltCard maxTilt={5}>{children}</TiltCard>
+  return <GyroTilt>{children}</GyroTilt>
+}
+
 // ── AnimatedNumber ─────────────────────────────────────────────────────────────
 // Scroll-triggered animated counter — inspired by 21st.dev Count Animation
 function AnimatedNumber({ target, prefix = "", suffix = "", className = "" }: {
@@ -382,7 +469,7 @@ function PhoneShowcase() {
             animate={tier === "off" ? undefined : { y: [0, -12, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
           >
-            <TiltCard maxTilt={5}>
+            <PhoneTiltWrapper tier={tier}>
               {/* Bezel — extra top padding so the upper frame is always visible
                   (the screenshot's dark header blends with a thin bezel) */}
               <div
@@ -425,7 +512,7 @@ function PhoneShowcase() {
                   )}
                 </div>
               </div>
-            </TiltCard>
+            </PhoneTiltWrapper>
           </motion.div>
         </motion.div>
       </div>
