@@ -17,7 +17,8 @@ public class EmailVerificationService {
 
     public void sendVerificationEmail(String toEmail, String code) {
         mailSender.send(mime -> {
-            MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
+            // multipart=true: obligatorio para setText(plain, html) — sin esto tira IllegalStateException
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
             helper.setFrom(fromAddress);
             helper.setTo(toEmail);
             helper.setSubject("Tu código de verificación — Pesito");

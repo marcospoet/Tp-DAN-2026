@@ -12,6 +12,7 @@ import com.pesito.auth.repository.UserRepository;
 import com.pesito.auth.security.JwtUtil;
 import com.pesito.auth.service.IAuthService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,6 +27,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthServiceImpl implements IAuthService {
 
     private final UserRepository userRepository;
@@ -65,8 +67,9 @@ public class AuthServiceImpl implements IAuthService {
 
         try {
             emailVerificationService.sendVerificationEmail(user.getEmail(), verificationCode);
-        } catch (Exception ignored) {
-            // El registro no falla si el mail no se puede enviar
+        } catch (Exception e) {
+            // El registro no falla si el mail no se puede enviar, pero queda registrado
+            log.warn("No se pudo enviar el email de verificación a {}: {}", user.getEmail(), e.getMessage());
         }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getId());
