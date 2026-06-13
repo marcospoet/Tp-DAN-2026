@@ -331,7 +331,7 @@ function LiveChatDemo() {
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <AnimatePresence>
-        {CHAT.slice(0, vis).map((m, i) => (
+        {CHAT.slice(0, vis).map((m, i) => ({ m, i })).slice(-3).map(({ m, i }) => (
           <motion.div key={i} initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.26, ease: E }}
             className={`flex ${m.s === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[90%] px-3 py-1.5 rounded-2xl text-[11px] leading-relaxed ${
@@ -347,40 +347,198 @@ function LiveChatDemo() {
 }
 
 // ── ChartBarDemo ───────────────────────────────────────────────────────────────
-function ChartBarDemo() {
+function ChartBarDemo({ className = "h-16", baseDelay = 0 }: { className?: string; baseDelay?: number }) {
   const bars = [32, 55, 40, 75, 52, 88, 43, 80, 60, 72, 48, 85]
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
   return (
-    <div ref={ref} className="flex items-end gap-1 h-16 w-full">
+    <div ref={ref} className={`flex items-end gap-1 w-full ${className}`}>
       {bars.map((h, i) => (
         <motion.div key={i} className="flex-1 rounded-sm" style={{ background: `oklch(0.72 0.19 160 / ${0.2 + (i / bars.length) * 0.65})`, originY: 1 }}
           initial={{ scaleY: 0 }} animate={inView ? { scaleY: h / 100 } : {}}
-          transition={{ delay: i * 0.05, duration: 0.55, ease: E }} />
+          transition={{ delay: baseDelay + i * 0.05, duration: 0.55, ease: E }} />
       ))}
     </div>
   )
 }
 
-// ── CategoriesPills ────────────────────────────────────────────────────────────
-function CategoriesPills() {
-  const cats = [
-    { label: "Comida",         col: "text-primary border-primary/25 bg-primary/10" },
-    { label: "Transporte",     col: "text-violet-400 border-violet-400/25 bg-violet-400/10" },
-    { label: "Salud",          col: "text-rose-400 border-rose-400/25 bg-rose-400/10" },
-    { label: "Ocio",           col: "text-amber-400 border-amber-400/25 bg-amber-400/10" },
-    { label: "Suscripciones",  col: "text-sky-400 border-sky-400/25 bg-sky-400/10" },
-    { label: "Trabajo",        col: "text-primary border-primary/20 bg-primary/8" },
-  ]
+// ── Sparkline ──────────────────────────────────────────────────────────────────
+// Mini gráfico de línea (12 meses) con relleno degradado, animado al entrar en vista.
+function Sparkline({ data, stroke = "rgb(251 191 36)", id }: { data: number[]; stroke?: string; id: string }) {
+  const max = Math.max(...data), min = Math.min(...data)
+  const w = 240, h = 56, padX = 6, padY = 6
+  const innerW = w - padX * 2, range = max - min || 1
+  const step = innerW / (data.length - 1)
+  const points = data.map((v, i) => [padX + i * step, h - padY - ((v - min) / range) * (h - padY * 2)] as const)
+  const line = points.map(([x, y]) => `${x},${y}`).join(" ")
+  const area = `${padX},${h} ${line} ${w - padX},${h}`
+  const last = points[points.length - 1]
+  const ref = useRef<SVGSVGElement>(null)
+  const inView = useInView(ref, { once: true })
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {cats.map((c, i) => (
-        <motion.span key={c.label} initial={{ opacity: 0, scale: 0.7 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-          transition={{ delay: i * 0.08, duration: 0.35, ease: E }}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${c.col}`}>
-          {c.label}
-        </motion.span>
-      ))}
+    <svg ref={ref} viewBox={`0 0 ${w} ${h}`} className="w-full h-14 overflow-visible" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <motion.polygon points={area} fill={`url(#${id})`}
+        initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ delay: 0.55, duration: 0.5 }} />
+      <motion.polyline points={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+        initial={{ pathLength: 0 }} animate={inView ? { pathLength: 1 } : {}} transition={{ duration: 0.9, ease: E }} />
+      <motion.circle cx={last[0]} cy={last[1]} r="3.5" fill={stroke} vectorEffect="non-scaling-stroke"
+        initial={{ scale: 0 }} animate={inView ? { scale: 1 } : {}} transition={{ delay: 0.9, duration: 0.3, ease: E }} />
+    </svg>
+  )
+}
+
+// ── InsightDemo ────────────────────────────────────────────────────────────────
+// Card 03 — "Visualizá todo": dato destacado + sparkline de historial + una mini
+// consulta a Pesito que se repite en loop (redibuja el trazo + "escribe" la respuesta).
+const MONTHLY = [42, 38, 51, 47, 60, 54, 68, 62, 71, 65, 78, 74]
+function InsightDemo() {
+  const tier = useContext(PerfContext)
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { once: true, margin: "-40px" })
+  const [cycle, setCycle] = useState(0)
+  const [answer, setAnswer] = useState(tier === "off")
+  useEffect(() => {
+    // Las animaciones en loop arrancan recién cuando la card entra en vista (scroll).
+    if (tier === "off" || !inView) { if (tier === "off") setAnswer(true); return }
+    let answerTimer: ReturnType<typeof setTimeout>
+    const start = () => { setAnswer(false); answerTimer = setTimeout(() => setAnswer(true), 1400) }
+    start()
+    const id = setInterval(() => { setCycle(c => c + 1); start() }, 4200)
+    return () => { clearInterval(id); clearTimeout(answerTimer) }
+  }, [tier, inView])
+  return (
+    <div ref={ref} className="flex flex-col gap-2 w-full">
+      {/* Dato destacado */}
+      <motion.div className="flex items-end justify-between gap-2"
+        initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+        transition={{ duration: 0.45, ease: E }}>
+        <div className="min-w-0">
+          <p className="text-[11px] text-muted-foreground leading-none mb-1">Gastos de este mes</p>
+          <p className="text-lg font-bold text-foreground leading-tight tabular-nums truncate">$245.000 ARS</p>
+        </div>
+        <span className="flex items-center gap-1 text-[11px] font-medium text-rose-400 shrink-0">
+          <TrendingUp className="w-3 h-3" /> +12%
+        </span>
+      </motion.div>
+      {/* Sparkline — 12 meses. key={cycle} fuerza el re-montaje => redibuja el trazo */}
+      <Sparkline key={cycle} data={MONTHLY} id="spark-insight" />
+      {/* Mini consulta a Pesito — pregunta fija, respuesta que "se escribe" */}
+      <div className="flex flex-col gap-1.5 pt-1 min-h-[64px]">
+        <div className="flex justify-end">
+          <div className="max-w-[90%] px-3 py-1.5 rounded-2xl rounded-tr-sm text-[11px] leading-relaxed bg-secondary/80 border border-border/40 text-foreground">
+            ¿Cuánto gasté en comida?
+          </div>
+        </div>
+        <div className="flex justify-start">
+          <AnimatePresence mode="wait">
+            {answer ? (
+              <motion.div key="ans"
+                initial={{ opacity: 0, y: 6, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.35, ease: E }}
+                className="max-w-[90%] px-3 py-1.5 rounded-2xl rounded-tl-sm text-[11px] leading-relaxed whitespace-nowrap bg-amber-400/10 border border-amber-400/25 text-amber-300">
+                <Sparkles className="inline w-3 h-3 text-amber-400 mr-1" />$48.000 ARS · 18%
+              </motion.div>
+            ) : (
+              <motion.div key="typing"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="px-3 py-2 rounded-2xl rounded-tl-sm bg-amber-400/10 border border-amber-400/25">
+                <span className="inline-flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <motion.span key={i} className="w-1 h-1 rounded-full bg-amber-400"
+                      animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut", delay: i * 0.15 }} />
+                  ))}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ClassifyDemo ───────────────────────────────────────────────────────────────
+// Card 02 — "Pesito clasifica": el "antes → después" — los gastos crudos se van
+// clasificando uno por uno en loop, y debajo los chips de categorías disponibles.
+const CLASSIFY = [
+  { raw: "Carrefour $15.000",     cat: "Comida",        col: "text-primary border-primary/25 bg-primary/10" },
+  { raw: "Uber $3.200",           cat: "Transporte",    col: "text-violet-400 border-violet-400/25 bg-violet-400/10" },
+  { raw: "Netflix USD 20 · Blue", cat: "Suscripciones", col: "text-sky-400 border-sky-400/25 bg-sky-400/10" },
+]
+const CATS = [
+  { label: "Comida",        col: "text-primary border-primary/25 bg-primary/10" },
+  { label: "Transporte",    col: "text-violet-400 border-violet-400/25 bg-violet-400/10" },
+  { label: "Salud",         col: "text-rose-400 border-rose-400/25 bg-rose-400/10" },
+  { label: "Ocio",          col: "text-amber-400 border-amber-400/25 bg-amber-400/10" },
+  { label: "Suscripciones", col: "text-sky-400 border-sky-400/25 bg-sky-400/10" },
+  { label: "Trabajo",       col: "text-primary border-primary/20 bg-primary/8" },
+]
+function ClassifyDemo() {
+  const tier = useContext(PerfContext)
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { once: true, margin: "-40px" })
+  const [revealed, setRevealed] = useState(tier === "off" ? CLASSIFY.length : 0)
+  useEffect(() => {
+    // El loop de clasificación arranca cuando la card entra en vista (scroll).
+    if (tier === "off" || !inView) return
+    const id = setInterval(() => {
+      setRevealed(r => (r >= CLASSIFY.length ? 0 : r + 1))
+    }, 1100)
+    return () => clearInterval(id)
+  }, [tier, inView])
+  return (
+    <div ref={ref} className="flex flex-col gap-2 w-full">
+      {/* antes → después (se revelan en loop) */}
+      <div className="flex flex-col gap-1.5">
+        {CLASSIFY.map((c, i) => {
+          const done = i < revealed
+          return (
+            <div key={c.raw} className="flex items-center gap-2 text-[11px] transition-opacity duration-300"
+              style={{ opacity: done ? 1 : 0.3 }}>
+              <span className="flex-1 min-w-0 px-2.5 py-1 rounded-lg bg-secondary/80 border border-border/40 text-muted-foreground truncate">
+                {c.raw}
+              </span>
+              <motion.span className="shrink-0 text-violet-400"
+                animate={done && tier !== "off" ? { x: [0, 3, 0], opacity: [0.6, 1, 0.6] } : { opacity: done ? 1 : 0.5 }}
+                transition={done && tier !== "off" ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}>
+                <ArrowRight className="w-3 h-3" />
+              </motion.span>
+              <AnimatePresence mode="wait" initial={false}>
+                {done ? (
+                  <motion.span key="cat"
+                    initial={{ opacity: 0, scale: 0.85, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                    className={`px-2.5 py-1 rounded-lg border font-medium whitespace-nowrap shrink-0 ${c.col}`}>
+                    {c.cat}
+                  </motion.span>
+                ) : (
+                  <span key="ph" className="px-2.5 py-1 rounded-lg border border-dashed border-border/50 text-muted-foreground/40 whitespace-nowrap shrink-0">
+                    ···
+                  </span>
+                )}
+              </AnimatePresence>
+            </div>
+          )
+        })}
+      </div>
+      {/* Chips de categorías disponibles */}
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        {CATS.map((c, i) => (
+          <motion.span key={c.label} initial={{ opacity: 0, scale: 0.7 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
+            transition={{ delay: 0.36 + i * 0.06, duration: 0.3, ease: E }}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${c.col}`}>
+            {c.label}
+          </motion.span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -874,8 +1032,8 @@ export function LandingPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           ── HOW IT WORKS — TiltCards ─────────────────────────────────────────
           ══════════════════════════════════════════════════════════════════════ */}
-      <section className="cv-auto px-5 pb-20 md:pb-32 lg:px-12">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section className="cv-auto px-5 pt-15 pb-20 md:pt-20 md:pb-32 lg:px-12">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
           {[
             {
               step: "01", icon: Mic, color: "text-primary", bg: "bg-primary/10",
@@ -883,26 +1041,28 @@ export function LandingPage() {
             },
             {
               step: "02", icon: Sparkles, color: "text-violet-400", bg: "bg-violet-400/10",
-              title: "Pesito clasifica", desc: "Detecta monto, categoría, moneda y tipo de cambio automáticamente.", demo: <CategoriesPills />,
+              title: "Pesito clasifica", desc: "Detecta monto, categoría, moneda y tipo de cambio automáticamente.", demo: <ClassifyDemo />,
             },
             {
               step: "03", icon: TrendingUp, color: "text-amber-400", bg: "bg-amber-400/10",
-              title: "Visualizá todo", desc: "12 meses de historial. Preguntale a Pesito cualquier consulta financiera.", demo: <ChartBarDemo />,
+              title: "Visualizá todo", desc: "12 meses de historial. Preguntale a Pesito cualquier consulta financiera.", demo: <InsightDemo />,
             },
           ].map((s, i) => (
-            <motion.div key={s.step}
+            <motion.div key={s.step} className="h-full"
               initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }}
               transition={{ delay: i * 0.13, duration: 0.7, ease: E }}>
               <TiltCard className="h-full">
-                <div className="rounded-3xl border border-border bg-card p-6 flex flex-col gap-4 h-full">
+                <div className="rounded-3xl border border-border bg-card p-6 pt-8 flex flex-col gap-4 h-full min-h-[480px]">
                   <div className="flex items-center justify-between">
                     <span className="text-5xl font-black leading-none select-none" style={{ color: "oklch(0.3 0.01 260 / 0.28)" }}>{s.step}</span>
-                    <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center`}>
+                    <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
                       <s.icon className={`w-5 h-5 ${s.color}`} />
                     </div>
                   </div>
-                  <div className="min-h-[110px] flex flex-col justify-end">{s.demo}</div>
-                  <div><h3 className="text-base font-bold text-foreground mb-1">{s.title}</h3><p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p></div>
+                  {/* zona demo: altura mínima fija + contenido anclado abajo */}
+                  <div className="flex-1 min-h-[188px] flex flex-col justify-end">{s.demo}</div>
+                  {/* bloque de texto con alto mínimo igual en las 3 */}
+                  <div className="min-h-[80px]"><h3 className="text-base font-bold text-foreground mb-1">{s.title}</h3><p className="text-sm text-muted-foreground leading-relaxed text-pretty">{s.desc}</p></div>
                 </div>
               </TiltCard>
             </motion.div>
