@@ -81,6 +81,21 @@ public class AiController {
     }
 
     /**
+     * Mapea una excepción del proveedor de IA a una respuesta HTTP.
+     * Los errores de cuota/rate-limit (429 / RESOURCE_EXHAUSTED) se devuelven
+     * como 429 con un mensaje específico para que el frontend los distinga de
+     * una falla genérica del servicio (ver translateError en lib/ai.ts).
+     */
+    private ResponseEntity<?> providerErrorResponse(Exception e, String defaultMessage) {
+        String msg = e.getMessage() != null ? e.getMessage() : "";
+        if (msg.matches("(?is).*(429|RESOURCE_EXHAUSTED|quota exceeded).*")) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Límite de requests alcanzado en tu cuenta de IA. Esperá unos segundos e intentá de nuevo."));
+        }
+        return ResponseEntity.internalServerError().body(Map.of("error", defaultMessage));
+    }
+
+    /**
      * Cambio de proveedor con espacios vectoriales incompatibles (Caso B):
      * "Actualizar mis documentos" — reindexa la knowledge base, re-embebe las
      * memorias de chat y el perfil con el proveedor nuevo. Corre en background
@@ -179,8 +194,7 @@ public class AiController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/parse: {}", e.getMessage());
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Error del servicio de IA. Intentá de nuevo."));
+            return providerErrorResponse(e, "Error del servicio de IA. Intentá de nuevo.");
         }
     }
 
@@ -223,8 +237,7 @@ public class AiController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/chat: {}", e.getMessage());
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Error del servicio de chat. Intentá de nuevo."));
+            return providerErrorResponse(e, "Error del servicio de chat. Intentá de nuevo.");
         }
     }
 
@@ -260,8 +273,7 @@ public class AiController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/detect-intent: {}", e.getMessage());
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Error del servicio de IA. Intentá de nuevo."));
+            return providerErrorResponse(e, "Error del servicio de IA. Intentá de nuevo.");
         }
     }
 
@@ -288,8 +300,7 @@ public class AiController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/csv-mapping: {}", e.getMessage());
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Error al analizar el CSV. Intentá de nuevo."));
+            return providerErrorResponse(e, "Error al analizar el CSV. Intentá de nuevo.");
         }
     }
 
@@ -315,8 +326,7 @@ public class AiController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error in /api/ai/transcribe: {}", e.getMessage());
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Error al transcribir el audio. Intentá de nuevo."));
+            return providerErrorResponse(e, "Error al transcribir el audio. Intentá de nuevo.");
         }
     }
 

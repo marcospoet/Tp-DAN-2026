@@ -9,6 +9,14 @@ export type ExchangeRateMode = "api" | "manual"
 export type ExchangeRateType = "BLUE" | "TARJETA" | "OFICIAL" | "MEP" | "MANUAL"
 export type AIProvider = "claude" | "openai" | "gemini"
 
+// Gemini soporta el formato clásico "AIzaSy..." (39 caracteres) y el nuevo
+// formato de clave "AQ.<resto>" emitido por Google AI Studio.
+const GEMINI_KEY_REGEX = /^(AIza[0-9A-Za-z_-]{35}|AQ\.[0-9A-Za-z_-]{20,})$/
+
+export function isValidGeminiKey(key: string): boolean {
+  return GEMINI_KEY_REGEX.test(key.trim())
+}
+
 interface SettingsState {
   // AI Provider
   aiProvider: AIProvider
@@ -102,12 +110,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Reset on sign-out ─────────────────────────────────────────────────────────
+  // Limpia TODO el estado de ajustes a sus valores por defecto: si no se hace,
+  // queda "pegado" el proveedor de IA / cuenta / cotización de la cuenta
+  // anterior hasta que el hydrate de la cuenta nueva lo pise (y si ese hydrate
+  // se demora o falla, el usuario ve datos de la sesión previa).
   useEffect(() => {
     return registerSignOutCleanup(() => {
       setUserName("Usuario")
+      setAiProvider("claude")
       setApiKeyClaude("")
       setApiKeyOpenAI("")
       setApiKeyGemini("")
+      setDefaultAccount("Efectivo")
+      setUsdRate(1350)
+      setExchangeRateMode("api")
+      setPreferredExchangeRateType("OFICIAL")
       setDefaultExRateType("BLUE")
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -7,7 +7,7 @@ import {
   ArrowRight, CheckCircle2,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { useSettings, type AIProvider } from "@/lib/settings-context"
+import { useSettings, isValidGeminiKey, type AIProvider } from "@/lib/settings-context"
 import { ONBOARDING_KEY } from "@/components/dashboard/shared"
 
 const KEY_PREFIXES: Record<AIProvider, string> = {
@@ -42,8 +42,12 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
   const [keyError, setKeyError] = useState<string | null>(null)
 
   const prefix = KEY_PREFIXES[localProvider]
-  const keyIsValid = localKey.startsWith(prefix) && localKey.length > prefix.length + 8
-  const keyIsWrong = localKey.length > 3 && !localKey.startsWith(prefix)
+  const keyIsValid = localProvider === "gemini"
+    ? isValidGeminiKey(localKey)
+    : localKey.startsWith(prefix) && localKey.length > prefix.length + 8
+  const keyIsWrong = localProvider === "gemini"
+    ? localKey.length > 3 && !isValidGeminiKey(localKey)
+    : localKey.length > 3 && !localKey.startsWith(prefix)
 
   const handleNext = () => {
     if (hasExistingKey) {
@@ -74,7 +78,12 @@ export function OnboardingWizard({ onDone }: { onDone: () => void }) {
 
   const handleAINext = () => {
     if (localKey && !keyIsValid) {
-      setKeyError(`La clave de ${AI_PROVIDERS.find(p => p.id === localProvider)?.label} debe empezar con "${prefix}"`)
+      const label = AI_PROVIDERS.find(p => p.id === localProvider)?.label
+      setKeyError(
+        localProvider === "gemini"
+          ? `La clave de ${label} no tiene un formato válido (debe empezar con "AIza" o "AQ.")`
+          : `La clave de ${label} debe empezar con "${prefix}"`
+      )
       return
     }
     setKeyError(null)

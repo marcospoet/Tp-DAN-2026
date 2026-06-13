@@ -261,7 +261,16 @@ export function AuthPage() {
       <motion.button
         className="fixed z-50 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         style={{ top: "max(1.5rem, env(safe-area-inset-top))", left: "max(1.5rem, env(safe-area-inset-left))" }}
-        onClick={() => setView("landing")}
+        onClick={() => {
+          // Si se abandona una verificación pendiente, no debe quedar "pegada":
+          // de lo contrario, al volver a /auth para registrar/loguear OTRA
+          // cuenta, pendingVerifyEmail seguiría apuntando a la cuenta anterior.
+          if (mode === "verify") {
+            removeToken()
+            sessionStorage.removeItem(PENDING_VERIFY_KEY)
+          }
+          setView("landing")
+        }}
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.4 }}

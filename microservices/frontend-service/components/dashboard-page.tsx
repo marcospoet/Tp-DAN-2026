@@ -599,6 +599,23 @@ export function DashboardPage() {
           detectAccountFromText(finalTextInput) ||
           defaultAccount
 
+        // "Tengo X en la cuenta Y": solo cargar el saldo inicial si esa cuenta
+        // todavía no tiene movimientos (balance 0) o no existe.
+        if (result.isBalanceDeclaration) {
+          const toArs = (t: typeof transactions[number]) =>
+            t.currency === "USD" ? t.amount * (t.txRate ?? usdRate) : t.amount
+          const currentBalance = transactions.reduce((sum, t) => {
+            if ((t.account ?? "Efectivo") !== detectedAccount) return sum
+            return sum + (t.type === "income" ? toArs(t) : -toArs(t))
+          }, 0)
+          if (currentBalance !== 0) {
+            toast.info(`"${detectedAccount}" ya tiene un saldo registrado`, {
+              description: `Saldo actual: ${formatCurrency(currentBalance)}. No se modificó.`,
+            })
+            continue
+          }
+        }
+
         addTransaction({
           description: result.description,
           amount: result.amount,
@@ -900,9 +917,14 @@ export function DashboardPage() {
           <div className="flex items-center justify-between px-4 pb-3 sm:px-6" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
             {/* Left: logo + balance (balance visible on sm+) */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAccountsModal(true)}
+                aria-label="Cuentas"
+                className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+              >
                 <Wallet className="w-4 h-4 text-primary-foreground" />
-              </div>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowAccountsModal(true)}

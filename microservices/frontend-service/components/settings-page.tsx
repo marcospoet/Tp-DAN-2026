@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { migrateEmbeddings, pauseDocuments } from "@/lib/ai"
 import { useAuth } from "@/lib/auth-context"
-import { useSettings, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/settings-context"
+import { useSettings, isValidGeminiKey, type ExchangeRateMode, type AIProvider, type ExchangeRateType } from "@/lib/settings-context"
 import { PAYMENT_ACCOUNTS, ACCOUNT_CATEGORIES } from "@/components/dashboard/shared"
 import { useBiometric } from "@/hooks/use-biometric"
 import { useExchangeRate } from "@/hooks/use-exchange-rate"
@@ -254,7 +254,11 @@ export function SettingsPage() {
     const activeKey =
       localProvider === "claude" ? localKeysClaude :
       localProvider === "openai" ? localKeysOpenAI : localKeysGemini
-    if (activeKey && !activeKey.startsWith(prefix)) {
+    if (localProvider === "gemini" && activeKey && !isValidGeminiKey(activeKey)) {
+      setKeyError(`La clave de ${activeProviderMeta.label} no tiene un formato válido (debe empezar con "AIza" o "AQ.")`)
+      return
+    }
+    if (localProvider !== "gemini" && activeKey && !activeKey.startsWith(prefix)) {
       setKeyError(`La clave de ${activeProviderMeta.label} debe empezar con "${prefix}"`)
       return
     }
@@ -758,8 +762,12 @@ export function SettingsPage() {
                   /* Input when no key or editing */
                   (() => {
                     const prefix = KEY_PREFIXES[localProvider]
-                    const isValid = newKeyValue.startsWith(prefix) && newKeyValue.length > prefix.length + 8
-                    const isWrongFormat = newKeyValue.length > 3 && !newKeyValue.startsWith(prefix)
+                    const isValid = localProvider === "gemini"
+                      ? isValidGeminiKey(newKeyValue)
+                      : newKeyValue.startsWith(prefix) && newKeyValue.length > prefix.length + 8
+                    const isWrongFormat = localProvider === "gemini"
+                      ? newKeyValue.length > 3 && !isValidGeminiKey(newKeyValue)
+                      : newKeyValue.length > 3 && !newKeyValue.startsWith(prefix)
                     return (
                       <div className="flex flex-col gap-1.5">
                         <div className="flex gap-2">
@@ -800,7 +808,11 @@ export function SettingsPage() {
                         </div>
                         {isWrongFormat && (
                           <p className="text-[11px] text-destructive">
-                            Las claves de {activeProviderMeta.label} empiezan con <span className="font-mono">{prefix}</span>
+                            {localProvider === "gemini" ? (
+                              <>Las claves de {activeProviderMeta.label} empiezan con <span className="font-mono">AIza</span> o <span className="font-mono">AQ.</span></>
+                            ) : (
+                              <>Las claves de {activeProviderMeta.label} empiezan con <span className="font-mono">{prefix}</span></>
+                            )}
                           </p>
                         )}
                       </div>

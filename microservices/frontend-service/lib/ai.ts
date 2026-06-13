@@ -25,6 +25,7 @@ export interface ParsedTransaction {
   suggestedExRateType?: "BLUE" | "OFICIAL" | "TARJETA" | "MEP"
   observation?: string
   account?: string
+  isBalanceDeclaration?: boolean
 }
 
 export interface ChatTurn {
@@ -146,6 +147,7 @@ function validateOne(raw: ParsedTransaction): ParsedTransaction {
     const sanitized = String(raw.account).replace(/<[^>]*>/g, "").trim().slice(0, 60)
     raw.account = sanitized || undefined
   }
+  if (raw.isBalanceDeclaration !== true) delete raw.isBalanceDeclaration
   return raw
 }
 
