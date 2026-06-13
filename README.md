@@ -135,6 +135,7 @@ curl http://localhost:8080/actuator/health
 | ai-service | `8083` | http://localhost:8083 |
 | Eureka Dashboard | `8761` | http://localhost:8761 |
 | RabbitMQ Management | `15672` | http://localhost:15672 |
+| Mailhog (mails de dev) | `8025` | http://localhost:8025 |
 | MinIO Console | `9001` | http://localhost:9001 |
 | MinIO API | `9000` | http://localhost:9000 |
 | Grafana | `3000` | http://localhost:3000 |
@@ -187,8 +188,10 @@ El repositorio incluye una colección [Bruno](https://www.usebruno.com/) lista p
 | `POST` | `/api/auth/register` | — | Registro con email/password (valida: mín. 8 chars, mayúscula, minúscula y número) |
 | `POST` | `/api/auth/login` | — | Login, devuelve JWT |
 | `GET` | `/api/auth/validate` | — | Validar token (usado por el Gateway) |
-| `GET` | `/api/auth/verify-email` | — | Verificación de email (link del mail) |
-| `POST` | `/api/auth/resend-verification` | — | Reenviar mail de verificación |
+| `POST` | `/api/auth/verify-email` | — | Verificar email con código de 6 dígitos enviado por mail |
+| `POST` | `/api/auth/resend-verification` | JWT | Reenviar mail de verificación (cooldown de 2 min en el frontend) |
+| `POST` | `/api/auth/forgot-password` | — | Solicitar código de 6 dígitos para restablecer la contraseña |
+| `POST` | `/api/auth/reset-password` | — | Restablecer contraseña con el código recibido por mail |
 | `GET` | `/api/auth/profile` | JWT | Perfil del usuario autenticado (API keys enmascaradas) |
 | `PUT` | `/api/auth/profile` | JWT | Actualizar perfil (nombre, presupuesto, proveedor de IA, API keys) |
 | `POST` | `/api/auth/change-password` | JWT | Cambiar contraseña |
@@ -231,6 +234,36 @@ Cada microservicio Java expone su documentación interactiva:
 
 - auth-service: http://localhost:8081/swagger-ui.html
 - transaction-service: http://localhost:8082/swagger-ui.html
+
+---
+
+## Verificación de email y restablecimiento de contraseña en local
+
+`auth-service` envía mails reales (verificación de cuenta y restablecimiento de
+contraseña) vía SMTP. En `docker compose`, ese SMTP apunta a **Mailhog**, que
+captura cualquier mail enviado sin entregarlo a una casilla real.
+
+### Ver los mails con Mailhog
+
+Abrir **http://localhost:8025** — ahí aparecen tanto el mail de "Verificá tu
+email" (código de 6 dígitos al registrarse) como el de "Restablecé tu
+contraseña" (al usar "¿Olvidaste tu contraseña?" en el login). Copiar el
+código de 6 dígitos del mail y pegarlo en la pantalla correspondiente del
+frontend.
+
+### Atajo: marcar una cuenta como verificada sin pasar por el mail
+
+Para desarrollo rápido, `dev-verify-account.ps1` marca un usuario como
+`email_verified = true` directo en la base, sin necesidad de leer el mail de
+Mailhog:
+
+```powershell
+.\dev-verify-account.ps1 -Email test@local.dev
+```
+
+> Solo aplica al **registro/verificación de cuenta**. Para "olvidé mi
+> contraseña" no hay atajo: el código se genera en la base pero hay que
+> leerlo desde Mailhog (http://localhost:8025), ya que el script no lo expone.
 
 ---
 

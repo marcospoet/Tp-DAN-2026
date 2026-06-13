@@ -38,6 +38,12 @@ public class User {
     @Column(name = "email_verification_expiry")
     private Instant emailVerificationExpiry;
 
+    @Column(name = "password_reset_token")
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_expiry")
+    private Instant passwordResetExpiry;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

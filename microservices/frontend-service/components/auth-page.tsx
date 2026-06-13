@@ -17,11 +17,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PENDING_VERIFY_KEY, useAuth } from "@/lib/auth-context"
+import { PENDING_RESET_KEY, PENDING_VERIFY_KEY, useAuth } from "@/lib/auth-context"
 import { apiRequest, removeToken, setToken } from "@/lib/api-client"
 import { toast } from "sonner"
 
-type Mode = "login" | "register" | "verify"
+type Mode = "login" | "register" | "verify" | "forgot" | "reset"
 
 interface AuthResponse {
   token: string
@@ -50,6 +50,40 @@ function GitHubIcon() {
   )
 }
 
+// Definido fuera de AuthPage para que React no lo desmonte/remonte en cada
+// render (lo que reiniciaba la animación de entrada de AnimatePresence cada
+// vez que un estado cambiaba, p.ej. el tick del cooldown cada segundo).
+function FeedbackBlock({ error, successMsg }: { error: string | null; successMsg: string | null }) {
+  return (
+    <AnimatePresence mode="wait">
+      {error && (
+        <motion.div
+          key="error"
+          className="flex items-start gap-2.5 rounded-xl bg-destructive/10 border border-destructive/20 px-3.5 py-3"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+        >
+          <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive leading-snug">{error}</p>
+        </motion.div>
+      )}
+      {successMsg && (
+        <motion.div
+          key="success"
+          className="flex items-start gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-3"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+        >
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-emerald-500 leading-snug">{successMsg}</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 export function AuthPage() {
   const { setView } = useAuth()
 
@@ -57,12 +91,21 @@ export function AuthPage() {
   const pendingVerifyEmail =
     typeof window !== "undefined" ? sessionStorage.getItem(PENDING_VERIFY_KEY) : null
 
-  const [mode, setMode] = useState<Mode>(pendingVerifyEmail ? "verify" : "login")
+  // Si quedó un restablecimiento de contraseña pendiente, arrancar en esa pantalla
+  const pendingResetEmail =
+    typeof window !== "undefined" ? sessionStorage.getItem(PENDING_RESET_KEY) : null
+
+  const [mode, setMode] = useState<Mode>(
+    pendingVerifyEmail ? "verify" : pendingResetEmail ? "reset" : "login"
+  )
   const [name, setName] = useState("")
-  const [email, setEmail] = useState(pendingVerifyEmail ?? "")
+  const [email, setEmail] = useState(pendingVerifyEmail ?? pendingResetEmail ?? "")
   const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
@@ -88,9 +131,13 @@ export function AuthPage() {
   const switchMode = (next: Mode) => {
     clearMessages()
     setName("")
-    setEmail("")
+    if (next !== "forgot") setEmail("")
     setPassword("")
+    setCode("")
+    setNewPassword("")
+    setConfirmPassword("")
     setShowPassword(false)
+    setShowNewPassword(false)
     setMode(next)
   }
 
@@ -223,35 +270,92 @@ export function AuthPage() {
     }
   }
 
-  // ── Shared feedback block ───────────────────────────────────────────────────
-  const FeedbackBlock = () => (
-    <AnimatePresence mode="wait">
-      {error && (
-        <motion.div
-          key="error"
-          className="flex items-start gap-2.5 rounded-xl bg-destructive/10 border border-destructive/20 px-3.5 py-3"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-        >
-          <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-          <p className="text-sm text-destructive leading-snug">{error}</p>
-        </motion.div>
-      )}
-      {successMsg && (
-        <motion.div
-          key="success"
-          className="flex items-start gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-3"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-        >
-          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-emerald-500 leading-snug">{successMsg}</p>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    clearMessages()
+
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      setError("Ingresá un email válido.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await apiRequest("/api/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      sessionStorage.setItem(PENDING_RESET_KEY, email.trim())
+      setCode("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setResendCooldown(120)
+      toast.success("Revisá tu email", {
+        description: "Si la cuenta existe, te enviamos un código para restablecer tu contraseña.",
+      })
+      setMode("reset")
+    } catch {
+      setError("No se pudo procesar la solicitud. Intentá de nuevo.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    clearMessages()
+
+    if (!/^\d{6}$/.test(code)) {
+      setError("Ingresá el código de 6 dígitos que te enviamos por email.")
+      return
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
+      setError("La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await apiRequest("/api/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), code, newPassword }),
+      })
+      sessionStorage.removeItem(PENDING_RESET_KEY)
+      toast.success("¡Contraseña actualizada!", { description: "Ya podés iniciar sesión con tu nueva contraseña." })
+      switchMode("login")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ""
+      setError(msg && !msg.startsWith("HTTP ") ? msg : "Código inválido o expirado.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResendReset = async () => {
+    clearMessages()
+    if (!email.trim()) {
+      setError("Ingresá tu email para reenviar el código.")
+      return
+    }
+    setResending(true)
+    try {
+      await apiRequest("/api/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      setCode("")
+      setResendCooldown(120)
+      setSuccessMsg("Te enviamos un código nuevo. Revisá tu casilla.")
+    } catch {
+      setError("No se pudo reenviar el código. Intentá de nuevo en unos minutos.")
+    } finally {
+      setResending(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 relative overflow-hidden">
@@ -268,6 +372,9 @@ export function AuthPage() {
           if (mode === "verify") {
             removeToken()
             sessionStorage.removeItem(PENDING_VERIFY_KEY)
+          }
+          if (mode === "forgot" || mode === "reset") {
+            sessionStorage.removeItem(PENDING_RESET_KEY)
           }
           setView("landing")
         }}
@@ -293,19 +400,31 @@ export function AuthPage() {
               <Wallet className="w-6 h-6 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              {mode === "login" ? "Bienvenido de vuelta" : mode === "register" ? "Crea tu cuenta" : "Verificá tu email"}
+              {mode === "login"
+                ? "Bienvenido de vuelta"
+                : mode === "register"
+                ? "Crea tu cuenta"
+                : mode === "verify"
+                ? "Verificá tu email"
+                : mode === "forgot"
+                ? "Restaurar contraseña"
+                : "Restablecer contraseña"}
             </h1>
             <p className="text-sm text-muted-foreground text-center">
               {mode === "login"
                 ? "Inicia sesion para continuar"
                 : mode === "register"
                 ? "Registrate para empezar a trackear"
-                : <>Te enviamos un código de 6 dígitos a <span className="text-foreground font-medium">{email.trim()}</span></>}
+                : mode === "verify"
+                ? <>Te enviamos un código de 6 dígitos a <span className="text-foreground font-medium">{email.trim()}</span></>
+                : mode === "forgot"
+                ? "Ingresá tu email y te enviaremos un código para restablecer tu contraseña"
+                : <>Ingresá el código que enviamos a <span className="text-foreground font-medium">{email.trim()}</span> y elegí tu nueva contraseña</>}
             </p>
           </div>
 
           {/* ── OAuth buttons ─────────────────────────────────── */}
-          {mode !== "verify" && (
+          {mode !== "verify" && mode !== "forgot" && mode !== "reset" && (
           <>
           <div className="flex flex-col gap-2 mb-6">
             <Button
@@ -376,7 +495,7 @@ export function AuthPage() {
               />
             </div>
 
-            <FeedbackBlock />
+            <FeedbackBlock error={error} successMsg={successMsg} />
 
             <Button
               type="submit"
@@ -409,6 +528,181 @@ export function AuthPage() {
                 }}
               >
                 Cerrar sesión
+              </button>
+            </div>
+          </motion.form>
+          ) : mode === "forgot" ? (
+          <motion.form
+            onSubmit={handleForgotPassword}
+            className="flex flex-col gap-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="forgot-email" className="text-sm text-muted-foreground">
+                Email
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/50 h-11"
+                  disabled={loading}
+                  autoComplete="email"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <FeedbackBlock error={error} successMsg={successMsg} />
+
+            <Button
+              type="submit"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold rounded-xl cursor-pointer mt-1"
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar código"}
+            </Button>
+
+            <p className="text-center text-sm mt-1">
+              <button
+                type="button"
+                className="text-sm text-primary hover:underline font-medium cursor-pointer"
+                onClick={() => switchMode("login")}
+              >
+                Volver a iniciar sesión
+              </button>
+            </p>
+          </motion.form>
+          ) : mode === "reset" ? (
+          <motion.form
+            onSubmit={handleResetPassword}
+            className="flex flex-col gap-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reset-email" className="text-sm text-muted-foreground">
+                Email
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/50 h-11"
+                  disabled={loading}
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reset-code" className="text-sm text-muted-foreground">
+                Código de verificación
+              </Label>
+              <Input
+                id="reset-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="••••••"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                className="bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/40 h-14 text-center text-2xl font-semibold tracking-[0.5em]"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-password" className="text-sm text-muted-foreground">
+                Nueva contraseña
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="new-password"
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="Min. 8 car., mayúscula y número"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="pl-10 pr-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/50 h-11"
+                  disabled={loading}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  aria-label={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirm-password" className="text-sm text-muted-foreground">
+                Confirmar contraseña
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="confirm-password"
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="Repetí tu nueva contraseña"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/50 h-11"
+                  disabled={loading}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            <FeedbackBlock error={error} successMsg={successMsg} />
+
+            <Button
+              type="submit"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold rounded-xl cursor-pointer mt-1"
+              disabled={loading || code.length !== 6}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Restablecer contraseña"}
+            </Button>
+
+            <div className="flex items-center justify-between mt-1">
+              <button
+                type="button"
+                className="text-sm text-primary hover:underline font-medium cursor-pointer disabled:opacity-50 disabled:no-underline disabled:cursor-default"
+                onClick={handleResendReset}
+                disabled={resending || loading || resendCooldown > 0}
+              >
+                {resending
+                  ? "Enviando..."
+                  : resendCooldown > 0
+                  ? `Reenviar en ${formatCooldown(resendCooldown)}`
+                  : "Reenviar código"}
+              </button>
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                onClick={() => {
+                  sessionStorage.removeItem(PENDING_RESET_KEY)
+                  switchMode("login")
+                }}
+              >
+                Cancelar
               </button>
             </div>
           </motion.form>
@@ -503,7 +797,19 @@ export function AuthPage() {
                 </div>
               </div>
 
-              <FeedbackBlock />
+              {mode === "login" && (
+                <div className="flex justify-end -mt-2">
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline font-medium cursor-pointer"
+                    onClick={() => switchMode("forgot")}
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+              )}
+
+              <FeedbackBlock error={error} successMsg={successMsg} />
 
               <Button
                 type="submit"

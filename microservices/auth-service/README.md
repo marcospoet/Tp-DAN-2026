@@ -114,8 +114,10 @@ management.endpoints.web.exposure.include=health,info,prometheus
 | `POST` | `/api/auth/register` | ❌ | Registro — valida password: mín. 8 chars, mayúscula, minúscula y número |
 | `POST` | `/api/auth/login` | ❌ | Login, devuelve JWT |
 | `GET` | `/api/auth/validate` | ❌ | Validar token |
-| `GET` | `/api/auth/verify-email` | ❌ | Verificación de email (link del mail) |
-| `POST` | `/api/auth/resend-verification` | ❌ | Reenviar mail de verificación |
+| `POST` | `/api/auth/verify-email` | ❌ | Verificar email con código de 6 dígitos enviado por mail |
+| `POST` | `/api/auth/resend-verification` | ✅ JWT | Reenviar mail de verificación |
+| `POST` | `/api/auth/forgot-password` | ❌ | Solicitar código de 6 dígitos para restablecer la contraseña |
+| `POST` | `/api/auth/reset-password` | ❌ | Restablecer contraseña con el código recibido por mail |
 | `GET/POST` | `/oauth2/**`, `/login/oauth2/**` | ❌ | Flujo OAuth2 con Google/GitHub (redirect) |
 | `GET` | `/api/auth/profile` | ✅ JWT | Obtener perfil (API keys enmascaradas) |
 | `PUT` | `/api/auth/profile` | ✅ JWT | Actualizar perfil — campos omitidos no se tocan; key vacía = borrar |

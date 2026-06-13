@@ -92,6 +92,25 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Solicitar restablecimiento de contraseña", description = "Si el email corresponde a una cuenta local, envía un código de 6 dígitos para restablecer la contraseña")
+    @ApiResponse(responseCode = "204", description = "Solicitud procesada (siempre, exista o no la cuenta)")
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request.email());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Restablecer contraseña con código", description = "El usuario ingresa el código de 6 dígitos recibido por email junto con la nueva contraseña")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Contraseña restablecida exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Código inválido o expirado, o contraseña inválida")
+    })
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Obtener perfil del usuario autenticado")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/profile")

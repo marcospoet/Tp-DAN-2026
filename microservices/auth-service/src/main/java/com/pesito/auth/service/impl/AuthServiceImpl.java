@@ -201,6 +201,53 @@ public class AuthServiceImpl implements IAuthService {
         emailVerificationService.sendVerificationEmail(email, code);
     }
 
+    @Override
+    @Transactional
+    public void forgotPassword(String email) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        // No revelamos si el email existe ni si la cuenta es OAuth: respondemos igual en todos los casos
+        if (user == null || !"local".equals(user.getProvider())) {
+            return;
+        }
+
+        String code = generateVerificationCode();
+        user.setPasswordResetToken(code);
+        user.setPasswordResetExpiry(Instant.now().plusSeconds(3600));
+        userRepository.save(user);
+
+        try {
+            emailVerificationService.sendPasswordResetEmail(user.getEmail(), code);
+        } catch (Exception e) {
+            log.warn("No se pudo enviar el email de restablecimiento de contraseña a {}: {}", user.getEmail(), e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        if (!request.newPassword().matches(PASSWORD_REGEX)) {
+            throw new IllegalArgumentException(PASSWORD_REQUIREMENTS);
+        }
+
+        User user = userRepository.findByEmail(request.email())
+            .orElseThrow(() -> new IllegalArgumentException("Código de restablecimiento inválido."));
+
+        if (user.getPasswordResetToken() == null ||
+            !user.getPasswordResetToken().equals(request.code())) {
+            throw new IllegalArgumentException("Código de restablecimiento inválido.");
+        }
+
+        if (user.getPasswordResetExpiry() == null ||
+            user.getPasswordResetExpiry().isBefore(Instant.now())) {
+            throw new IllegalArgumentException("El código de restablecimiento expiró. Pedí uno nuevo.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setPasswordResetToken(null);
+        user.setPasswordResetExpiry(null);
+        userRepository.save(user);
+    }
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static String generateVerificationCode() {

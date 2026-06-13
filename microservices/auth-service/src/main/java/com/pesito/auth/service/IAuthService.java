@@ -12,4 +12,6 @@ public interface IAuthService {
     void deleteUser(String email);
     void verifyEmail(String email, String code);
     void resendVerification(String email);
+    void forgotPassword(String email);
+    void resetPassword(ResetPasswordRequest request);
 }

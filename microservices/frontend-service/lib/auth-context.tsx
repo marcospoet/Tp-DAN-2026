@@ -32,6 +32,9 @@ export interface ProfileResponse {
 /** Clave de sessionStorage con el email pendiente de verificación (gate de acceso) */
 export const PENDING_VERIFY_KEY = "bb_pending_verify"
 
+/** Clave de sessionStorage con el email pendiente de restablecer contraseña */
+export const PENDING_RESET_KEY = "bb_pending_reset"
+
 export const AUTHENTICATED_VIEWS: View[] = ["dashboard", "settings", "profile", "analytics"]
 
 interface AuthState {
@@ -136,6 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const token = getToken()
     if (!token) {
+      if (sessionStorage.getItem(PENDING_RESET_KEY)) {
+        setView("auth", true)
+      }
       setLoadingAuth(false)
       return
     }
