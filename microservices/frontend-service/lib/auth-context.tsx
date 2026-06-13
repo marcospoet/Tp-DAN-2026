@@ -25,7 +25,12 @@ export interface ProfileResponse {
   apiKeyGemini?: string
   defaultAccount?: string
   defaultExRateType?: string
+  emailVerified?: boolean
+  provider?: string
 }
+
+/** Clave de sessionStorage con el email pendiente de verificación (gate de acceso) */
+export const PENDING_VERIFY_KEY = "bb_pending_verify"
 
 export const AUTHENTICATED_VIEWS: View[] = ["dashboard", "settings", "profile", "analytics"]
 
@@ -137,6 +142,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     apiRequest<ProfileResponse>("/api/auth/profile")
       .then((profile) => {
+        // Gate de verificación: sin email verificado no se entra al dashboard
+        if (profile.emailVerified === false) {
+          sessionStorage.setItem(PENDING_VERIFY_KEY, profile.email)
+          setView("auth", true)
+          return
+        }
+        sessionStorage.removeItem(PENDING_VERIFY_KEY)
         const authUser: AuthUser = { id: profile.userId, email: profile.email }
         hydrateCallbacks.current.forEach(cb => cb(profile, authUser))
         setUser(authUser)
@@ -155,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOutCallbacks.current.forEach(cb => cb())
     sessionStorage.removeItem("bb_view")
     sessionStorage.removeItem("bb_chat_messages")
+    sessionStorage.removeItem(PENDING_VERIFY_KEY)
     localStorage.removeItem(TOKEN_KEY)
     setUser(null)
     setView("landing", true)

@@ -73,7 +73,7 @@ public class AuthServiceImpl implements IAuthService {
         }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getId());
-        return new AuthResponse(token, user.getId(), user.getEmail());
+        return new AuthResponse(token, user.getId(), user.getEmail(), false);
     }
 
     @Override
@@ -85,7 +85,7 @@ public class AuthServiceImpl implements IAuthService {
         User user = userRepository.findByEmail(request.email()).orElseThrow();
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getId());
-        return new AuthResponse(token, user.getId(), user.getEmail());
+        return new AuthResponse(token, user.getId(), user.getEmail(), user.isEmailVerified());
     }
 
     @Override

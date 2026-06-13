@@ -17,8 +17,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuth } from "@/lib/auth-context"
-import { apiRequest, setToken } from "@/lib/api-client"
+import { PENDING_VERIFY_KEY, useAuth } from "@/lib/auth-context"
+import { apiRequest, removeToken, setToken } from "@/lib/api-client"
 import { toast } from "sonner"
 
 type Mode = "login" | "register" | "verify"
@@ -27,6 +27,7 @@ interface AuthResponse {
   token: string
   userId: string
   email: string
+  emailVerified: boolean
 }
 
 // SVG inline para evitar dependencias externas
@@ -52,9 +53,13 @@ function GitHubIcon() {
 export function AuthPage() {
   const { setView } = useAuth()
 
-  const [mode, setMode] = useState<Mode>("login")
+  // Si quedó una verificación pendiente (login o recarga sin verificar), arrancar en esa pantalla
+  const pendingVerifyEmail =
+    typeof window !== "undefined" ? sessionStorage.getItem(PENDING_VERIFY_KEY) : null
+
+  const [mode, setMode] = useState<Mode>(pendingVerifyEmail ? "verify" : "login")
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(pendingVerifyEmail ?? "")
   const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -128,6 +133,13 @@ export function AuthPage() {
           body: JSON.stringify({ email: email.trim(), password }),
         })
         setToken(res.token)
+        if (!res.emailVerified) {
+          // Cuenta sin verificar: no entra hasta ingresar el código
+          sessionStorage.setItem(PENDING_VERIFY_KEY, email.trim())
+          toast.info("Verificá tu email para continuar", { description: email.trim() })
+          setMode("verify")
+          return
+        }
         toast.success("¡Bienvenido de vuelta!", { description: email.trim() })
         window.location.reload()
       } else {
@@ -140,6 +152,7 @@ export function AuthPage() {
           }),
         })
         setToken(res.token)
+        sessionStorage.setItem(PENDING_VERIFY_KEY, email.trim())
         toast.success("¡Cuenta creada!", { description: `Bienvenido${name.trim() ? `, ${name.trim()}` : ""}` })
         // No recargamos: pasamos a la pantalla de verificación con la sesión ya activa
         setResendCooldown(120)
@@ -184,6 +197,7 @@ export function AuthPage() {
         method: "POST",
         body: JSON.stringify({ email: email.trim(), code }),
       })
+      sessionStorage.removeItem(PENDING_VERIFY_KEY)
       toast.success("¡Email verificado!", { description: "Tu cuenta está completamente activa." })
       window.location.reload()
     } catch (err: unknown) {
@@ -379,9 +393,13 @@ export function AuthPage() {
               <button
                 type="button"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  removeToken()
+                  sessionStorage.removeItem(PENDING_VERIFY_KEY)
+                  switchMode("login")
+                }}
               >
-                Omitir por ahora
+                Cerrar sesión
               </button>
             </div>
           </motion.form>
