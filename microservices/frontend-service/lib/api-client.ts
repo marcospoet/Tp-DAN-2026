@@ -39,6 +39,16 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       signal: options.signal ?? controller.signal,
     })
 
+    if (res.status === 429) {
+      // Rate limit del gateway: no trae body, pero sí header Retry-After (segundos).
+      const retryAfter = Number(res.headers.get("Retry-After")) || 0
+      const espera = retryAfter > 0 ? ` Esperá ${retryAfter} segundos e intentá de nuevo.` : ""
+      const err = new Error(`Demasiadas solicitudes en poco tiempo.${espera}`)
+      ;(err as Error & { status: number; retryAfter: number }).status = 429
+      ;(err as Error & { status: number; retryAfter: number }).retryAfter = retryAfter
+      throw err
+    }
+
     if (!res.ok) {
       let message = `HTTP ${res.status}`
       try {
