@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.pesito.auth.messaging.UserDeletedEvent;
 import com.pesito.auth.messaging.UserRegisteredEvent;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -41,14 +42,14 @@ public class AuthServiceImpl implements IAuthService {
             throw new EmailAlreadyRegisteredException(request.email());
         }
 
-        String verificationToken = UUID.randomUUID().toString();
+        String verificationCode = generateVerificationCode();
 
         User user = User.builder()
             .email(request.email())
             .passwordHash(passwordEncoder.encode(request.password()))
             .provider("local")
             .emailVerified(false)
-            .emailVerificationToken(verificationToken)
+            .emailVerificationToken(verificationCode)
             .emailVerificationExpiry(Instant.now().plusSeconds(86400))
             .build();
 
@@ -63,7 +64,7 @@ public class AuthServiceImpl implements IAuthService {
         eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail()));
 
         try {
-            emailVerificationService.sendVerificationEmail(user.getEmail(), verificationToken);
+            emailVerificationService.sendVerificationEmail(user.getEmail(), verificationCode);
         } catch (Exception ignored) {
             // El registro no falla si el mail no se puede enviar
         }
@@ -155,13 +156,22 @@ public class AuthServiceImpl implements IAuthService {
 
     @Override
     @Transactional
-    public void verifyEmail(String token) {
-        User user = userRepository.findByEmailVerificationToken(token)
-            .orElseThrow(() -> new IllegalArgumentException("Token de verificación inválido."));
+    public void verifyEmail(String email, String code) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new IllegalArgumentException("Código de verificación inválido."));
+
+        if (user.isEmailVerified()) {
+            return; // idempotente: verificar dos veces no es un error
+        }
+
+        if (user.getEmailVerificationToken() == null ||
+            !user.getEmailVerificationToken().equals(code)) {
+            throw new IllegalArgumentException("Código de verificación inválido.");
+        }
 
         if (user.getEmailVerificationExpiry() == null ||
             user.getEmailVerificationExpiry().isBefore(Instant.now())) {
-            throw new IllegalArgumentException("El token de verificación expiró.");
+            throw new IllegalArgumentException("El código de verificación expiró. Pedí uno nuevo.");
         }
 
         user.setEmailVerified(true);
@@ -180,12 +190,18 @@ public class AuthServiceImpl implements IAuthService {
             throw new IllegalStateException("El email ya está verificado.");
         }
 
-        String token = UUID.randomUUID().toString();
-        user.setEmailVerificationToken(token);
+        String code = generateVerificationCode();
+        user.setEmailVerificationToken(code);
         user.setEmailVerificationExpiry(Instant.now().plusSeconds(86400));
         userRepository.save(user);
 
-        emailVerificationService.sendVerificationEmail(email, token);
+        emailVerificationService.sendVerificationEmail(email, code);
+    }
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private static String generateVerificationCode() {
+        return String.format("%06d", RANDOM.nextInt(1_000_000));
     }
 
     private ProfileResponse toProfileResponse(User user) {

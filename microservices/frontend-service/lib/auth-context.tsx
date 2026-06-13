@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { apiRequest, getToken, removeToken, setToken, TOKEN_KEY } from "@/lib/api-client"
-import { toast } from "sonner"
 
 export type View = "landing" | "auth" | "settings" | "dashboard" | "profile" | "analytics"
 
@@ -127,15 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (oauthToken) {
         setToken(oauthToken)
         window.history.replaceState({}, document.title, window.location.pathname)
-      }
-
-      // Verifica email si hay un token de verificacion en la URL
-      const verifyToken = urlParams.get("verify_token")
-      if (verifyToken) {
-        window.history.replaceState({}, document.title, window.location.pathname)
-        apiRequest(`/api/auth/verify-email?token=${verifyToken}`)
-          .then(() => toast.success("¡Email verificado!", { description: "Tu cuenta está completamente activa." }))
-          .catch(() => toast.error("Enlace de verificación inválido o expirado."))
       }
     }
 

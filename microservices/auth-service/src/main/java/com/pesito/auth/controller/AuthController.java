@@ -65,15 +65,15 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Verificar email con token", description = "El usuario accede desde el link en el email de verificación")
+    @Operation(summary = "Verificar email con código", description = "El usuario ingresa el código de 6 dígitos que recibió por email al registrarse")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Email verificado exitosamente"),
-        @ApiResponse(responseCode = "400", description = "Token inválido o expirado")
+        @ApiResponse(responseCode = "400", description = "Código inválido o expirado")
     })
-    @GetMapping("/verify-email")
-    public ResponseEntity<Map<String, String>> verifyEmail(@RequestParam String token) {
+    @PostMapping("/verify-email")
+    public ResponseEntity<Map<String, String>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         try {
-            authService.verifyEmail(token);
+            authService.verifyEmail(request.email(), request.code());
             return ResponseEntity.ok(Map.of("message", "Email verificado exitosamente."));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

@@ -21,7 +21,7 @@ import { useAuth } from "@/lib/auth-context"
 import { apiRequest, setToken } from "@/lib/api-client"
 import { toast } from "sonner"
 
-type Mode = "login" | "register"
+type Mode = "login" | "register" | "verify"
 
 interface AuthResponse {
   token: string
@@ -56,8 +56,10 @@ export function AuthPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -128,8 +130,8 @@ export function AuthPage() {
         })
         setToken(res.token)
         toast.success("¡Cuenta creada!", { description: `Bienvenido${name.trim() ? `, ${name.trim()}` : ""}` })
-        setSuccessMsg("Te mandamos un email de verificación. Revisá tu casilla para activar tu cuenta.")
-        window.location.reload()
+        // No recargamos: pasamos a la pantalla de verificación con la sesión ya activa
+        setMode("verify")
       }
     } catch (err: unknown) {
       const status = (err as { status?: number }).status
@@ -152,6 +154,45 @@ export function AuthPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    clearMessages()
+
+    if (!/^\d{6}$/.test(code)) {
+      setError("Ingresá el código de 6 dígitos que te enviamos por email.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await apiRequest("/api/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), code }),
+      })
+      toast.success("¡Email verificado!", { description: "Tu cuenta está completamente activa." })
+      window.location.reload()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ""
+      setError(msg && !msg.startsWith("HTTP ") ? msg : "Código inválido o expirado.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    clearMessages()
+    setResending(true)
+    try {
+      await apiRequest("/api/auth/resend-verification", { method: "POST" })
+      setCode("")
+      setSuccessMsg("Te enviamos un código nuevo. Revisá tu casilla.")
+    } catch {
+      setError("No se pudo reenviar el código. Intentá de nuevo en unos minutos.")
+    } finally {
+      setResending(false)
     }
   }
 
@@ -216,14 +257,20 @@ export function AuthPage() {
               <Wallet className="w-6 h-6 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
+              {mode === "login" ? "Bienvenido de vuelta" : mode === "register" ? "Crea tu cuenta" : "Verificá tu email"}
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {mode === "login" ? "Inicia sesion para continuar" : "Registrate para empezar a trackear"}
+            <p className="text-sm text-muted-foreground text-center">
+              {mode === "login"
+                ? "Inicia sesion para continuar"
+                : mode === "register"
+                ? "Registrate para empezar a trackear"
+                : <>Te enviamos un código de 6 dígitos a <span className="text-foreground font-medium">{email.trim()}</span></>}
             </p>
           </div>
 
           {/* ── OAuth buttons ─────────────────────────────────── */}
+          {mode !== "verify" && (
+          <>
           <div className="flex flex-col gap-2 mb-6">
             <Button
               type="button"
@@ -262,7 +309,67 @@ export function AuthPage() {
             <span className="text-xs text-muted-foreground">o continúa con email</span>
             <div className="flex-1 h-px bg-border" />
           </div>
+          </>
+          )}
 
+          {/* ── Verification code form ───────────────────────── */}
+          {mode === "verify" ? (
+          <motion.form
+            onSubmit={handleVerify}
+            className="flex flex-col gap-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="code" className="text-sm text-muted-foreground">
+                Código de verificación
+              </Label>
+              <Input
+                id="code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="••••••"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                className="bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground/40 h-14 text-center text-2xl font-semibold tracking-[0.5em]"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+
+            <FeedbackBlock />
+
+            <Button
+              type="submit"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold rounded-xl cursor-pointer mt-1"
+              disabled={loading || code.length !== 6}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verificar"}
+            </Button>
+
+            <div className="flex items-center justify-between mt-1">
+              <button
+                type="button"
+                className="text-sm text-primary hover:underline font-medium cursor-pointer disabled:opacity-50"
+                onClick={handleResend}
+                disabled={resending || loading}
+              >
+                {resending ? "Enviando..." : "Reenviar código"}
+              </button>
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                onClick={() => window.location.reload()}
+              >
+                Omitir por ahora
+              </button>
+            </div>
+          </motion.form>
+          ) : (
+          <>
           {/* ── Login / Register form ─────────────────────── */}
           <AnimatePresence mode="wait">
             <motion.form
@@ -381,6 +488,8 @@ export function AuthPage() {
               {mode === "login" ? "Registrate" : "Inicia sesion"}
             </button>
           </p>
+          </>
+          )}
         </div>
       </motion.div>
     </div>
