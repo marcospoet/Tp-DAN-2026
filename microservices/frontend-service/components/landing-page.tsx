@@ -331,7 +331,7 @@ function LiveChatDemo() {
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <AnimatePresence>
-        {CHAT.slice(0, vis).map((m, i) => ({ m, i })).slice(-3).map(({ m, i }) => (
+        {CHAT.slice(0, vis).map((m, i) => ({ m, i })).slice(-4).map(({ m, i }) => (
           <motion.div key={i} initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.26, ease: E }}
             className={`flex ${m.s === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[90%] px-3 py-1.5 rounded-2xl text-[11px] leading-relaxed ${
@@ -448,8 +448,8 @@ function InsightDemo() {
             ) : (
               <motion.div key="typing"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="px-3 py-2 rounded-2xl rounded-tl-sm bg-amber-400/10 border border-amber-400/25">
-                <span className="inline-flex gap-1">
+                className="px-3 py-1.5 rounded-2xl rounded-tl-sm text-[11px] leading-relaxed bg-amber-400/10 border border-amber-400/25">
+                <span className="inline-flex items-center gap-1">
                   {[0, 1, 2].map(i => (
                     <motion.span key={i} className="w-1 h-1 rounded-full bg-amber-400"
                       animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }}
@@ -1052,7 +1052,7 @@ export function LandingPage() {
               initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }}
               transition={{ delay: i * 0.13, duration: 0.7, ease: E }}>
               <TiltCard className="h-full">
-                <div className="rounded-3xl border border-border bg-card p-6 pt-8 flex flex-col gap-4 h-full min-h-[480px]">
+                <div className="rounded-3xl border border-border bg-card p-6 pt-8 flex flex-col gap-4 h-full min-h-[400px] md:h-[400px]">
                   <div className="flex items-center justify-between">
                     <span className="text-5xl font-black leading-none select-none" style={{ color: "oklch(0.3 0.01 260 / 0.28)" }}>{s.step}</span>
                     <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
@@ -1060,7 +1060,7 @@ export function LandingPage() {
                     </div>
                   </div>
                   {/* zona demo: altura mínima fija + contenido anclado abajo */}
-                  <div className="flex-1 min-h-[188px] flex flex-col justify-end">{s.demo}</div>
+                  <div className="flex-1 min-h-[188px] flex flex-col justify-end overflow-hidden">{s.demo}</div>
                   {/* bloque de texto con alto mínimo igual en las 3 */}
                   <div className="min-h-[80px]"><h3 className="text-base font-bold text-foreground mb-1">{s.title}</h3><p className="text-sm text-muted-foreground leading-relaxed text-pretty">{s.desc}</p></div>
                 </div>
